@@ -22,6 +22,12 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   aSerial.vv().pln(F("====== Config mode opening ======"));
   //aSerial.vvv().p(F("Portal SSID : ")).pln(myWiFiManager->getConfigPortalSSID());
   attachInterrupt(digitalPinToInterrupt(OTA_BUTTON_PIN), quitConfigMode, CHANGE);
+  //  if (WiFi.status() != WL_CONNECTED) {
+  //    reconnectWifi();
+  //  }
+  //  if (!mqttClient.connected()) {
+  //    reconnectMqtt();
+  //  }
   configMode = 1;
   wifiFailCount = 0;
   mqttFailCount = 0;
@@ -76,30 +82,29 @@ void configManager(Config &config) {
   wifiManager.setCustomHeadElement(script.c_str());
 
   configCount++;
-  // After first start, hard reset, or without any known WiFi AP
   aSerial.vv().p(F(" load config file.")).pln((const char*)config.mqttServer);
 
-  // After first start, hard reset, or without any known WiFi AP
-  if (WiFi.status() != WL_CONNECTED) {
-    aSerial.vv().pln(F("Auto config access"));
-    if (!wifiManager.autoConnect(config.devEui, config.devicePass)) {
-      aSerial.v().pln(F("Connection failure --> Timeout"));
-      delay(3000);
-      setReboot();
-    }
-  }
+  //  // After first start, hard reset, or without any known WiFi AP
+  //  if (WiFi.status() != WL_CONNECTED) {
+  //    aSerial.vv().pln(F("Auto config access"));
+  //    if (!wifiManager.autoConnect(config.devEui, config.devicePass)) {
+  //      aSerial.v().pln(F("Connection failure --> Timeout"));
+  //      delay(3000);
+  //      setReboot();
+  //    }
+  //  }
   // When manually asking ...
-  else if ((configCount > 0 && manualConfig == true)) {
+  if ((configCount > 0 && manualConfig == true)) {
     //manualConfig = false;
     aSerial.vv().pln(F("Manual config access"));
     wifiManager.setTimeout(configTimeout * 2);
-    wifiManager.startConfigPortal(config.devEui, config.devicePass);
+    wifiManager.startConfigPortal(config.deviceName, config.devicePass);
   }
   // When wifi is already connected but connection got interrupted ...
-  else if (WiFi.status() != WL_CONNECTED || !mqttClient.connected() || (strcmp(config.mqttServer, "") == 0) || (configCount > 0 && manualConfig == false)) {
-    aSerial.vv().pln(F("User config access"));
+  else if ((WiFi.status() != WL_CONNECTED || !mqttClient.connected() || (strcmp(config.mqttServer, "") == 0)) && manualConfig == false) {
+    aSerial.vv().pln(F("Network config access"));
     wifiManager.setTimeout(configTimeout);
-    wifiManager.startConfigPortal(config.devEui, config.devicePass);
+    wifiManager.startConfigPortal(config.deviceName, config.devicePass);
   }
 
   detachInterrupt(digitalPinToInterrupt(OTA_BUTTON_PIN));
