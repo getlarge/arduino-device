@@ -1,4 +1,4 @@
-# Arduino-device
+# Arduino-device-mqtt
 
 ESP8266 arduino sketch to interact with [Aloes backend](https://framagit.org/aloes/device-manager) MQTT API.
 
@@ -24,7 +24,7 @@ following libraries are required :
 ## Installation
 
 ```
-git clone https://framagit.org/aloes/arduino-device.git
+git clone https://framagit.org/aloes/arduino-device-mqtt.git
 ```
 
 ## Usage
@@ -39,7 +39,7 @@ git clone https://framagit.org/aloes/arduino-device.git
 
 - Copy the deviceId ( generated at setup on the serial interface ) to Aloes backend
 
-- Enter device credentials in `config.h` or configure the board via the Access Point ( 192.168.244.1 )
+- Enter wifi and device credentials in `config.h` or configure the board via the Access Point ( 192.168.244.1 )
 
 #endif
 
