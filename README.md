@@ -13,6 +13,22 @@ Packages for ESP8266
 
 - Enter `http://arduino.esp8266.com/stable/package_esp8266com_index.json` into Additional Board Manager URLs field. 
 
+Requires the next libraries : 
+- <FS.h>
+- <advancedSerial.h>
+- <ESP8266WiFi.h>
+- <ESP8266WiFiMulti.h>
+- <ESP8266httpUpdate.h>
+- <ESP8266mDNS.h>
+- <TimeLib.h>
+- <Wire.h>
+- <Ticker.h>
+- <Bounce2.h>
+- <PubSubClient.h>
+- <ESP8266HTTPClient.h>
+- <ESP8266WebServer.h>
+- <WiFiManager.h>
+- <ArduinoJson.h>
 
 ## Installation
 
