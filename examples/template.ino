@@ -1,13 +1,10 @@
-#include "dependencies.h"
-// add your dependencies under
-
 #include "config.h"
-#include "globals.h"
+#include <AloesDevice.h>
 
-// ADD YOUR LOGIC HERE 
+// ADD YOUR LOGIC HERE
 
 //  CALLED on incoming mqtt/serial message
-void onMessage(Message &message, char sensorId[4]) {
+void Aloes::onMessage(Message &message) {
   if ( strcmp(message.omaObjectId, "3306") == 0 && strcmp(message.omaResourceId, "5850") == 0) {
     if ( strcmp(message.method, "1") == 0 ) {
       if ( ( strcmp(message.payload, "true") == 0 || strcmp(message.payload, "1") == 0 )) {
@@ -19,31 +16,19 @@ void onMessage(Message &message, char sensorId[4]) {
       }
     } else if ( strcmp(message.method, "2") == 0 ) {
       int val = digitalRead(RELAY_SWITCH);
-      // publish val
+      char payload[10];
+      itoa(val, payload, 10);
+      aloes.setMessage(message, (char*)"1", message.omaObjectId, message.sensorId, message.omaResourceId, payload);
+      return aloes.sendMessage(config, message);
     }
   }
 }
 
-void beforeSetup() {
-}
-
-void afterSetup() {
-}
 
 void setup() {
-  deviceSetup();
-}
-
-void beforeLoop() {
-}
-
-void afterLoop() {
+  initDevice();
 }
 
 void loop() {
-  if ( !executeOnce ) {
-    executeOnce = true;
-    aSerial.v().println(F("====== Loop started ======"));
-  }
-  deviceLoop();
+  deviceRoutine();
 }

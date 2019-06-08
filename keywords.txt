@@ -1,0 +1,11 @@
+Aloes   		KEYWORD1
+setMessage  	KEYWORD2
+sendMessage		KEYWORD2
+startStream		KEYWORD2
+writeStream		KEYWORD2
+endStream		KEYWORD2
+onMessage     	KEYWORD2
+initDevice    	KEYWORD2
+deviceRoutine  	KEYWORD2
+message			KEYWORD3
+config			KEYWORD3

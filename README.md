@@ -1,6 +1,6 @@
 # Arduino-device-mqtt
 
-ESP8266 arduino sketch to interact with [Aloes backend](https://framagit.org/aloes/device-manager) MQTT API.
+ESP8266 arduino library to interact with [Aloes backend](https://framagit.org/aloes/device-manager) MQTT API.
 
 
 ## Requirements
@@ -13,19 +13,16 @@ Packages for ESP8266
 
 - Enter `http://arduino.esp8266.com/stable/package_esp8266com_index.json` into Additional Board Manager URLs field. 
 
-following libraries are required :
-
-- ArduinoJson
-- Bounce2
-- FS
-- Ticker
-- WifiManager
 
 ## Installation
 
+- Via git, clone into your `~/Arduino/Libraries` folder
 ```
 git clone https://framagit.org/aloes/arduino-device-mqtt.git
 ```
+
+- Via Arduino Library Manager, look for AloesDevice
+
 
 ## Usage
 
@@ -33,17 +30,12 @@ git clone https://framagit.org/aloes/arduino-device-mqtt.git
 
 - Edit your preferences in `config.h`
 
-- Upload the code on your ESP8266 board
+- Enter wifi and device credentials or configure the board via the Access Point ( 192.168.244.1 )
 
-#if using MQTT_CLIENT
+- Configure your sensors following [Open Mobile Alliance LwM2M Registry](http://openmobilealliance.org/wp/OMNA/LwM2M/LwM2MRegistry.html) ( see examples )
+
+- Upload the code on your ESP8266 board
 
 - Copy the deviceId ( generated at setup on the serial interface ) to Aloes backend
 
-- Enter wifi and device credentials in `config.h` or configure the board via the Access Point ( 192.168.244.1 )
 
-#endif
-
-
-## Reference
-
-- Set resetConfig to true, to restore default state at reset

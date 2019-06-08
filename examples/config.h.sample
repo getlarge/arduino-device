@@ -2,36 +2,39 @@
 #define SKETCH_NAME "[ALOES DEVICE]"
 #define SKETCH_VERSION "0.5"
 
+/// NETWORK PARAMS
+#define ID_TYPE 0 // 0 : prefix+espCHipId - 1 : prefix+MACadress - 2 : prefix+EUI-64 address
+#define CLIENT_SECURE 1
+#define MQTT_CLIENT 1
+#define WEB_SERVER 0
+#define NTP_SERVER 0
+
 /// GLOBALS
 #define DEBUG 4 // from 0 to 4
 #define BAUD_RATE 115200
 
 // ESP
 #define BOUNCE_LOCK_OUT
-
-// WEMOS D1 R2 Mini
-// v2 higher bandwidth
-// 4M ( 1M spiffs )
 #define STATE_LED       D4
 #define OTA_BUTTON_PIN  D3
-#define RELAY_SWITCH    D1
+#define RELAY_SWITCH  D0
 
 // NETWORK CONFIG
 // WiFi default config ; leave empty to use automatic Wifi config
-const char* defaultWifiSSID = "";
-const char* defaultWifiPass = "";
+const char* defaultWifiSSID = ""; 
+const char* defaultWifiPass = ""; 
 // MQTT default config
-const char* defaultMqttServer = "192.168.1.2";
+const char* defaultMqttServer = "192.168.1.133";
 const char* defaultMqttPort = "1883";
 const char* defaultMqttUser = "";
 const char* defaultMqttPassword = "";
-const char* defaultMqttTopicIn = "12345-in";
-const char* defaultMqttTopicOut = "12345-out";
+const char* defaultMqttTopicIn = "123456-in";
+const char* defaultMqttTopicOut = "123456-out";
 
 struct Config {
-  char deviceName[30] = "aloes_device"; // replace hyphens by underscores
+  char deviceName[30] = "aloes-device";
   char devEui[20];
-  char devicePass[40] = "motdepasse";
+  char devicePass[40] = "";
   char inPrefix[10] = "-in";
   char outPrefix[10] = "-out";
   char mqttServer[40];
@@ -52,6 +55,5 @@ struct Config {
 // todo : make a resources array instead ?
 const char* sensors[][60] = {
   { "3306", "1", "5850", "digital_input"},
-  { "3306", "2", "5850", "digital_input"},
-  { "3341", "3", "5527", "text_input"},
+  { "3349", "2", "5910", "buffer_input"},
 };
