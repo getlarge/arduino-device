@@ -1,62 +1,42 @@
 #ifndef AloesDevice_h
 #define AloesDevice_h
 
-//	#include <Arduino.h>
+#include <Arduino.h>
 
 #include <FS.h>
+#if defined(ESP8266) 
+#elif defined(ESP32)
+#include <SPIFFS.h>
+#define FORMAT_SPIFFS_IF_FAILED true
+#endif
+
+#include <ArduinoJson.h>
 #include <advancedSerial.h>
 
+#if defined(ESP8266) 
 #include <ESP8266WiFi.h>
-#include <ESP8266WiFiMulti.h>
-#include <ESP8266httpUpdate.h>
-#include <ESP8266mDNS.h>
-//  #include <DNSServer.h>
-#include <TimeLib.h>
-#include <Wire.h>
-
-
-#if CLIENT_SECURE == 1
-#include <WiFiClientSecure.h>
+#elif defined(ESP32)
+#include <WiFi.h>
 #endif
 
-#include <ESP8266WebServer.h>
-#include <WiFiManager.h>
-#include <ArduinoJson.h>
+#include "lib/Globals.h"
 
-#include "lib/Constants.h"
+#include "lib/AsyncWait.h"
 
-ESP8266WiFiMulti WiFiMulti;
-
-#if CLIENT_SECURE == 0
-WiFiClient wifiClient;
-#elif CLIENT_SECURE == 1
-WiFiClientSecure wifiClient;
-#endif
-
-Config config;
-Message message;
-
-// todo :remove from global but need to change attachInterrupt callback signature ?
-WiFiManager wifiManager;
-
+#include "lib/Device.cpp"
+Device device;
 
 #include "lib/Helpers.cpp"
 Helpers helpers; 
 
-#include "lib/Transport.cpp"
-#if MQTT_CLIENT == 1
-Transport transport(wifiClient); 
-#elif WEB_SERVER == 1
-ESP8266WebServer server(80);
-WiFiClient client = server.client();
-Transport transport(client); 
-#endif
-
 #include "lib/Network.cpp"
-Network network(config); 
+Network _network; 
 
 #include "lib/Manager.cpp"
-Manager manager(config); 
+Manager manager(device); 
+
+#include "lib/Transport.cpp"
+Transport _transport; 
 
 #include "lib/Aloes.cpp"
 extern Aloes aloes;

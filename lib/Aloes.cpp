@@ -1,238 +1,364 @@
+#include "lib/Message.cpp"
+
 #include "Aloes.h"
 
-// initialize node manager
 Aloes::Aloes() {
-  // setup the message container
- // message = Message();
-  //  _message = Message();
-  // allocate block for all the sensors if sensor_count is provided
-  //  if (sensor_count > 0) sensors.allocateBlocks(sensor_count);
-  // setup serial port baud rate
+  Message _message; 
+  // _message = message;
+  // get sensor count from arg
+  //  Sensor sensors[sensorCount];
 }
 
-void Aloes::getDeviceId(Config &config) {
-#if ID_TYPE == 0
-  char *espChipId;
-  float chipId = ESP.getChipId();
-  char chipIdBuffer[sizeof(chipId)];
-  espChipId = dtostrf(chipId, sizeof(chipId), 0, chipIdBuffer);
-  strcpy(config.devEui, espChipId);
-#endif
-#if ID_TYPE == 1
-  String macAdress = WiFi.macAddress();
-  char macAdressBuffer[20];
-  macAdress.toCharArray(macAdressBuffer, 20);
-  // next => remove the ":" in the mac adress
-  strcpy(config.devEui, macAdressBuffer);
-#endif
-  //    #if ID_TYPE == 2
-  //// soyons fous, let's create an eui64 address ( like ipv6 )
-  ////      Step #1: Split the MAC address in the middle:
-  ////      Step #2: Insert FF:FE in the middle:
-  ////      Step #4: Convert the first eight bits to binary:
-  ////      Step #5: Flip the 7th bit:
-  ////      Step #6: Convert these first eight bits back into hex:
-  //    #endif
-  aSerial.vvv().p(F("DeviceID : ")).pln(config.devEui);
-  helpers.generateId(config);
+Aloes::Aloes(Aloes &aloes) {
+
 }
 
-void Aloes::setSensorRoutes(Config &config, const char* objectId, const char* sensorId, const char* resourceId, size_t index) {
-  // "pattern": "+prefixedDevEui/+method/+omaObjectId/+sensorId/+ipsoResourceId",
-  //  char topic[100];
-  char topic[150];
-  strcpy(topic, config.mqttTopicOut);
-  strcat(topic, "/1/" );
-  strcat(topic, objectId );
-  strcat(topic, "/" );
-  strcat(topic, sensorId );
-  strcat(topic, "/" );
-  strcat(topic, resourceId );
-  aSerial.vvvv().p(F("set topic : ")).pln(topic);
-  postTopics[index] = String(topic);
+bool Aloes::initDevice(DEVICE_CALLBACK_SIGNATURE) {
+  if (!device.init()) {
+    return false;
+  }
+  device.setCallback(onDeviceUpdate);
+  _message.setup(device);
+  return true;
 }
 
-void Aloes::setSensors(Config &config) {
+void Aloes::setMsgCallback(MESSAGE_CALLBACK_SIGNATURE) {
+  this->msgCallback = msgCallback;
+}
+
+void Aloes::onDeviceUpdate() {
+  _message.update(device);
+  _transport.update(device);
+}
+
+
+// "pattern": "+prefixedDevEui/+method/+omaObjectId/+sensorId/+ipsoResourceId",
+void Aloes::initSensors() {
   for (size_t i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++) {
     const char** sensor = sensors[i];
-    char objectId[5];
-    char sensorId[4];
-    char resourceId[5];
-    //  printf("sensor[%u]\n", i);
     for (size_t j = 0; sensor[j]; j++) {
       if (j == 0 ) {
-        strlcpy(objectId, sensor[j], sizeof(objectId));
+        setMsg(OBJECT_ID, sensor[j]);
       } else if (j == 1 ) {
-        strlcpy(sensorId, sensor[j], sizeof(sensorId));
+        setMsg(SENSOR_ID, sensor[j]);
       }  else if (j == 2 ) {
-        strlcpy(resourceId, sensor[j], sizeof(resourceId));
+        setMsg(RESOURCE_ID, sensor[j]);
       }
-      //  printf("  [%s]\n", sensor[j]);
     }
-    setSensorRoutes(config, (const char*)objectId, (const char*)sensorId, (const char*)resourceId, i);
+    setMsg(METHOD, "1");
+    char *topic = _message.fillTopic();
+    //  postTopics[index] = String(topic);
   }
 }
 
-void Aloes::presentSensors(Config &config) {
+void Aloes::presentSensors() {
   for (size_t i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++) {
     const char** sensor = sensors[i];
-    char objectId[5];
-    char sensorId[4];
-    char resourceId[5];
-    char payload[30];
-    //  printf("sensor[%u]\n", i);
     for (size_t j = 0; sensor[j]; j++) {
       if (j == 0 ) {
-        strlcpy(objectId, sensor[j], sizeof(objectId));
+        setMsg(OBJECT_ID, sensor[j]);
       } else if (j == 1 ) {
-        strlcpy(sensorId, sensor[j], sizeof(sensorId));
+        setMsg(SENSOR_ID, sensor[j]);
       }  else if (j == 2 ) {
-        strlcpy(resourceId, sensor[j], sizeof(resourceId));
+        setMsg(RESOURCE_ID, sensor[j]);
       } else if (j == 3 ) {
-        strlcpy(payload, sensor[j], sizeof(payload));
+        setMsg(PAYLOAD, sensor[j]);
       }
-      //  printf("  [%s]\n", sensor[j]);
     }
-    char presentationTopic[80];
-    strlcpy(presentationTopic, config.mqttTopicOut, sizeof(presentationTopic));
-    strcat(presentationTopic, "/0/" );
-    strcat(presentationTopic, objectId );
-    strcat(presentationTopic, "/" );
-    strcat(presentationTopic, sensorId );
-    strcat(presentationTopic, "/" );
-    strcat(presentationTopic, resourceId );
-    transport.publish((const char*)presentationTopic, payload, false);
-    //  mqttClient.publish((const char*)presentationTopic, payload);
+    setMsg(METHOD, "0");
+    sendMessage(MQTT);
   }
 }
 
-void Aloes::setMessage(Message &message, char method[5], char objectId[5], char sensorId[4], char resourceId[5], char payload[100] ) {
-//  void Aloes::setMessage(Message &message, char method[5], char *objectId, char *sensorId, char *resourceId, const char *payload) {
-  aSerial.vvv().p(F("setMessage : ")).p(resourceId).p("  ").pln(objectId);
-  strlcpy(message.method, method, sizeof(message.method));
-  strlcpy(message.omaObjectId, objectId, sizeof(message.omaObjectId));
-  strlcpy(message.sensorId, sensorId, sizeof(message.sensorId));
-  strlcpy(message.omaResourceId, resourceId, sizeof(message.omaResourceId));
-  //  message.payload = ((char*)payload);
-  strcpy(message.payload, payload);
-  //  message.payload = payload;
-  // strlcpy(message.payload, payload, sizeof(message.payload));
+char* Aloes::getConfig(DeviceKeys deviceKey) {
+  return device.get(deviceKey);
 }
 
-bool Aloes::sendMessage(Config &config, Message &message ) {
-  char topic[80];
-  strlcpy(topic, config.mqttTopicOut, sizeof(config.mqttTopicOut));
-  strcat(topic, "/");
-  strcat(topic, message.method );
-  strcat(topic, "/");
-  strcat(topic, message.omaObjectId );
-  strcat(topic, "/");
-  strcat(topic, message.sensorId );
-  strcat(topic, "/");
-  strcat(topic, message.omaResourceId );
-  if (transport.publish((const char*)topic, message.payload, false)) {
-    return true;
+void Aloes::setConfig(DeviceKeys deviceKey, char *value) {
+  device.set(deviceKey, value);
+}
+
+Aloes& Aloes::setCnf(DeviceKeys deviceKey, char* value) {
+  setConfig(deviceKey, value);
+  return *this;  
+}
+
+void Aloes::setPayload(uint8_t *payload, size_t length, const char* type) {
+  _message.setPayload(payload, length, type);
+}
+
+char* Aloes::getMsg(MessageKeys messageKey) {
+  return _message.get(messageKey);
+}
+
+Aloes& Aloes::setMsg(MessageKeys messageKey, char* value) {
+  _message.set(messageKey, value);
+  return *this;  
+}
+
+Aloes& Aloes::setMsg(MessageKeys messageKey, const char* value) {
+  _message.set(messageKey, value);
+  return *this;  
+}
+
+Aloes& Aloes::setMsg(MessageKeys messageKey, uint8_t* value, size_t length) {
+  _message.set(messageKey, value, length);
+  return *this;  
+}
+
+bool Aloes::sendMessage(transportLayer transportType) {
+  if (transportType == MQTT) {
+    char *topic = _message.fillTopic();
+    char *payload = getMsg(PAYLOAD);
+    aSerial.vvv().p(F("[ALOES] sendMessage res: ")).p(topic).p("  ").pln(payload);
+    if (_transport.publish((const char*)topic, payload, false)) {
+      return true;
+    }
+    return false;
+  } else if (transportType == HTTP) {
+    const char *method = getMsg(METHOD);
+    char *url = _message.fillUrl();
+    char *payload = getMsg(PAYLOAD);
+    aSerial.vvv().p(F("[ALOES] sendMessage res: ")).p(method).p("/").pln(url);
+    if (_transport.setRequest(method, url, payload)) {
+      return true;
+    }
+    return false;
   }
   return false;
 }
 
-bool Aloes::startStream(Config &config, Message &message, size_t length) {
-  char topic[80];
-  strlcpy(topic, config.mqttTopicOut, sizeof(config.mqttTopicOut));
-  strcat(topic, "/");
-  strcat(topic, message.method);
-  strcat(topic, "/");
-  strcat(topic, message.omaObjectId);
-  strcat(topic, "/");
-  strcat(topic, message.sensorId);
-  strcat(topic, "/");
-  strcat(topic, message.omaResourceId);
-  if (transport.beginPublish((const char*)topic, length, false)) {
+// bool Aloes::sendMessage(Config &config, size_t length) {
+//   char *topic = _message.setTopic(config);
+//   aSerial.vvv().p(F("sendMessage : ")).p(topic).p("  ").pln(_message.payload);
+//   //if (transport.publish((const char*)topic, _message.payload, false)) {
+//   if (transport.publish((const char*)topic, (const uint8_t*)_message.payload, length*2, false)) {
+//     return true;
+//   }
+//   return false;
+// }
+
+bool Aloes::startStream(size_t length) {
+  // char *topic; 
+  // _message.fillTopic(std::move(topic));
+  const char *topic = _message.fillTopic();
+  if (_transport.beginPublish(topic, length, false)) {
     return true;
   }
   return false;
 }
 
 size_t Aloes::writeStream(const uint8_t *payload, size_t length) {
-  transport.write(payload, length);
+  _transport.write(payload, length);
 }
 
 bool Aloes::endStream() {
-  if (transport.endPublish()) {
+  if (_transport.endPublish()) {
     return true;
   }
   return false;
 }
 
-// void Aloes::onReceive(char* topic, byte* payload, unsigned int length) {
-//   payload[length] = '\0';
-//   byte* p = (byte*)malloc(length);
-//   memcpy(p, payload, length);
-//   aSerial.v().println(F("====== Received message ======"));
-//   aSerial.vv().p(F("Topic : ")).pln((const char*)topic).p(F("Payload : ")).pln((const char*)payload);
-//   aloes->parseTopic(topic);
-//   aloes->parseMessage(p);
-//   free(p);
-// }
-
-void Aloes::parseTopic(char* topic) {
+bool Aloes::parseTopic(char* topic) {
   char *str, *p;
   uint8_t i = 0;
   // first sanity check
-  //  if (topic != strstr(topic, config.mqttTopicIn)) {
-  //    Serial.print("error in the protocol");
-  //    return;
-  //  }
-  // "pattern": "+prefixedDevEui/+method/+omaObjectId/+sensorId/+omaResourceId",
-  for (str = strtok_r(topic + 1, "/", &p); str && i <= 4;
-       str = strtok_r(NULL, "/", &p)) {
+   if (topic != strstr(topic, device.get(MQTT_TOPIC_IN))) {
+     Serial.print("error in the protocol");
+     return false;
+   }
+
+  // pattern = "prefixedDevEui/+method/+objectId/+sensorId/+resourceId",
+  for (str = strtok_r(topic + 1, "/", &p); str && i <= 4; str = strtok_r(NULL, "/", &p)) {
     switch (i) {
       case 0: {
-          //prefixedDevEui
-          break;
-        }
+        // prefixedDevEui
+        break;
+      }
       case 1: {
-          strlcpy(message.method, str, sizeof(message.method));
-          break;
-        }
+        _message.set(METHOD, str);
+        break;
+      }
       case 2: {
-          strlcpy(message.omaObjectId, str, sizeof(message.omaObjectId));
-          break;
-        }
+        _message.set(OBJECT_ID, str);
+        break;
+      }
       case 3: {
-          strlcpy(message.sensorId, str, sizeof(message.sensorId));
-          break;
-        }
+        _message.set(SENSOR_ID, str);
+        break;
+      }
       case 4: {
-          strlcpy(message.omaResourceId, str, sizeof(message.omaResourceId));
-          break;
-        }
+        _message.set(RESOURCE_ID, str);
+        break;
+      }
     }
     i++;
   }
-  aSerial.vvv().p(F("Method : ")).pln((const char*)message.method).p(F("For sensor : ")).pln((const char*)message.omaObjectId);
+  return true;
 }
 
-
-void Aloes::parseMessage(byte *payload) {
-  message.payload = (char*)payload;
+bool Aloes::parseMessage(char *payload) {
+  bool foundSensor = false;
   for (size_t i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++) {
     const char** sensor = sensors[i];
     char objectId[5];
     char sensorId[4];
-    char resourceId[5];
-    //  printf("sensor[%u]\n", i);
     for (size_t j = 0; sensor[j]; j++) {
       if (j == 0 ) {
         strlcpy(objectId, sensor[j], sizeof(objectId));
       } else if (j == 1 ) {
         strlcpy(sensorId, sensor[j], sizeof(sensorId));
-      }  else if (j == 2 ) {
-        strlcpy(resourceId, sensor[j], sizeof(resourceId));
       }
     }
-    if ( strcmp(message.sensorId, sensorId) == 0) {
-      return onMessage(message);
+    if (strcmp(_message.get(OBJECT_ID), objectId) == 0 && strcmp(_message.get(SENSOR_ID), sensorId) == 0) {
+      foundSensor = true;
     }
   }
+  if (foundSensor) {
+    _message.set(PAYLOAD, payload);
+     msgCallback(MQTT, &_message);
+     return true;
+  }
+  return false;
+}
+
+bool Aloes::parseMessage(uint8_t *payload, size_t length) {
+  bool foundSensor = false;
+  for (size_t i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++) {
+    const char** sensor = sensors[i];
+    char objectId[5];
+    char sensorId[4];
+    for (size_t j = 0; sensor[j]; j++) {
+       if (j == 0 ) {
+        strlcpy(objectId, sensor[j], sizeof(objectId));
+      } else if (j == 1 ) {
+        strlcpy(sensorId, sensor[j], sizeof(sensorId));
+      }
+    }
+    if (strcmp(_message.get(OBJECT_ID), objectId) == 0 && strcmp(_message.get(SENSOR_ID), sensorId) == 0) {
+      foundSensor = true;
+    }
+  }
+  if (foundSensor) {
+    setMsg(PAYLOAD, payload, length);
+    msgCallback(MQTT, &_message);
+    return true;
+  }
+  return false;
+}
+
+bool Aloes::parseUrl(char *url) {
+  char *str, *p;
+  uint8_t i = 0;
+  // pattern = "apiRoot/+collection/+path/#param"
+  if (url != strstr(url, device.get(HTTP_API_ROOT))) {
+    //  Serial.print("error in the protocol");
+    return false;
+  }
+
+  for (str = strtok_r(url + 1, "/", &p); str && i <= 3; str = strtok_r(NULL, "/", &p)) {
+    switch (i) {
+      case 0: {
+        // apiRoot
+        break;
+      }
+      case 1: {
+        _message.set(COLLECTION, str);
+        break;
+      }
+      case 2: {
+        _message.set(PATH, str);
+        break;
+      }
+      case 3: {
+        _message.set(PARAM, str);
+        break;
+      }
+    }
+    i++;
+  }
+  return true;
+}
+
+void Aloes::parseBody(char *body) {
+  _message.set(PAYLOAD, body);
+  if (strcmp(_message.get(COLLECTION), "Devices") == 0) {
+    //  if (strcmp(path, "get-state") == 0) { }
+    if (device.setInstance(body)) {
+      if (!stateReceived) {
+        stateReceived = true;
+      }
+    } else {
+     //  aSerial.vvvv().pln(F("[ALOES] device setting failed: ")).pln(device._deviceError);
+    }
+  }
+  msgCallback(HTTP, &_message);
+}
+
+void Aloes::parseBody(uint8_t *body, size_t length) {
+  //  const char* path = _message.getPath();
+  setMsg(PAYLOAD, body, length);
+  if (strcmp(_message.get(COLLECTION), "Devices") == 0) {
+    if (device.setInstance(body, length)) {
+      if (!stateReceived) {
+        stateReceived = true;
+      }
+    } else {
+     //  aSerial.vvvv().pln(F("[ALOES] device setting failed: ")).pln(device._deviceError);
+    }
+  }
+
+  aSerial.vvv().p(F("[ALOES] parseBody : ")).pln(_message.get(PAYLOAD));
+  msgCallback(HTTP, &_message);
+}
+
+void Aloes::parseBody(Stream *stream) {
+  //  const char* path = _message.getPath();
+  if (strcmp(_message.get(COLLECTION), "Devices") == 0) {
+  }
+  msgCallback(HTTP, &_message);
+}
+
+bool Aloes::getState() {
+  const char* deviceId = device.get(DEVICE_ID);
+  _message.set(METHOD, "2").set(COLLECTION, "Devices").set(PATH, "get-state").set(PARAM, deviceId).set(PAYLOAD, "");
+  if (sendMessage(HTTP)) {
+    aSerial.vvv().p(F("[ALOES] getState res: ")).pln("success");
+    return true;
+  } 
+  aSerial.vvv().p(F("[ALOES] getState res: ")).pln("error");
+  return false;
+}
+
+// void Aloes::setSensors(uint8_t *buffer, size_t length) {
+//   // use arduinojson.org/v6/assistant
+//   // int objectSize = 6;
+//   // int bufferSize = 1024; // 180
+//   // const size_t capacity = JSON_OBJECT_SIZE(objectSize) + bufferSize;
+//   DynamicJsonDocument doc(1024);
+//   DeserializationError error = deserializeJson(doc, buffer, length);
+//   if (error) {
+//     aSerial.vvvv().pln(F("[ALOES] deserializeJson() failed: ")).pln(error.c_str());
+//     return;
+//   }
+//   JsonArray array=doc.as<JsonArray>();
+//   // const char* name = obj["name"]; 
+//   // if(name != nullptr) {
+//   //   // copy in Device
+//   // }
+// }
+
+// void Aloes::authenticate() {
+
+// }
+
+void Aloes::getFirmwareUpdate() {
+  // implement safety routine with user defined callback ?
+  
+  // const char* url = "/api/Devices/get-ota-update/";
+  _message.set(COLLECTION, "Devices").set(PATH, "get-ota-update").set(PARAM, device.get(DEVICE_ID));
+  const char *url = _message.fillUrl();
+  aSerial.vvv().p(F("[ALOES] getFirmwareUpdate filePath : ")).pln(url);
+  //  manager.getUpdated(0, (const char*)url);
+  _transport.getUpdated(0, (const char*)device.get(HTTP_HOST), atoi(device.get(HTTP_PORT)), url);
 }

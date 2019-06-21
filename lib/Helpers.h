@@ -1,3 +1,10 @@
+/*
+ * Helpers.h
+ *
+ * Author:  Getlarge
+ * Created: 2019-06-10
+ */
+
 #ifndef Helpers_h
 #define Helpers_h
 
@@ -11,7 +18,6 @@ public:
 	static void tick();
 	void startTick(int duration);
 	void stopTick();
-	void generateId(Config &config);
 	void setPins();
 	void checkButton();
 	void readConfigButton();

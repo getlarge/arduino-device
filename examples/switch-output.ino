@@ -1,86 +1,109 @@
 #include "config.h"
-// const char* sensors[][60] = {
-//   { "3306", "1", "5850", "digital_input"},
-//   { "3306", "2", "5850", "digital_input"},
-//   { "3306", "3", "5850", "digital_input"},
-// };
 
+#if CLIENT_SECURE == 1 && defined(HTTP_CLIENT_SECURE) || defined(MQTT_CLIENT_SECURE)
+#include "secure-credentials.h"
+#endif
+// const char* sensors[][60] = {
+//   { "3306", "1", "5850", "digital_output"},
+//   { "3306", "2", "5850", "digital_output"},
+//   { "3306", "3", "5850", "digital_output"},
+// };
+ 
 #include <AloesDevice.h>
 
-#define INPUT_PIN_1  D5
-#define INPUT_PIN_2  D6
-#define INPUT_PIN_3  D7
+#define OUTPUT_PIN_1  D5
+#define OUTPUT_PIN_2  D6
+#define OUTPUT_PIN_3  D7
 
 void setupPins() {
-  pinMode(INPUT_PIN_1, OUTPUT);
-  digitalWrite(INPUT_PIN_1, 1);
-  pinMode(INPUT_PIN_2, OUTPUT);
-  digitalWrite(INPUT_PIN_2, 1);
-  pinMode(INPUT_PIN_3, OUTPUT);
-  digitalWrite(INPUT_PIN_3, 1);
+  pinMode(OUTPUT_PIN_1, OUTPUT);
+  digitalWrite(OUTPUT_PIN_1, 1);
+  pinMode(OUTPUT_PIN_2, OUTPUT);
+  digitalWrite(OUTPUT_PIN_2, 1);
+  pinMode(OUTPUT_PIN_3, OUTPUT);
+  digitalWrite(OUTPUT_PIN_3, 1);
 }
 
-//  CALLED on incoming mqtt/serial message
-void Aloes::onMessage(Message &message) {
-  if ( strcmp(message.omaObjectId, "3306") == 0 && strcmp(message.omaResourceId, "5850") == 0) {
-    if ( strcmp(message.method, "1") == 0 ) {
-      if ( ( strcmp(message.payload, "true") == 0 || strcmp(message.payload, "1") == 0 )) {
-        int pin;
-        int state = 1;
-        if (strcmp(message.sensorId, "1") == 0 ) {
-          // pin = atoi(message.sensorId);
-          pin = INPUT_PIN_1;
-        } else if (strcmp(message.sensorId, "2") == 0 ) {
-          pin = INPUT_PIN_2;
-        } else if (strcmp(message.sensorId, "3") == 0 ) {
-          pin = INPUT_PIN_3;
+// CALLED on incoming http/mqtt/serial message
+// MQTT pattern = "prefixedDevEui/+method/+objectId/+sensorId/+resourceId",
+// HTTP pattern = "apiRoot/+collection/+path/#param"
+void onMessage(transportLayer transportType, Message *message) {
+  if (transportType == MQTT) {
+    char* payload = message->get(PAYLOAD);
+    const char* method = message->get(METHOD);
+    const char* objectId = message->get(OBJECT_ID);
+    const char* resourceId = message->get(RESOURCE_ID);
+    const char* sensorId = message->get(SENSOR_ID);
+
+    if ( strcmp(objectId, "3306") == 0 && strcmp(resourceId, "5850") == 0) {
+      if ( strcmp(method, "1") == 0 ) {
+        if ( ( strcmp(payload, "true") == 0 || strcmp(payload, "1") == 0 )) {
+          int pin;
+          int state = 1;
+          if (strcmp(sensorId, "1") == 0 ) {
+            // pin = atoi(message.sensorId);
+            pin = OUTPUT_PIN_1;
+          } else if (strcmp(sensorId, "2") == 0 ) {
+            pin = OUTPUT_PIN_2;
+          } else if (strcmp(sensorId, "3") == 0 ) {
+            pin = OUTPUT_PIN_3;
+          }
+          //  aSerial.vvv().p(F("set pin : ")).p(pin).p(F(" State : ")).pln(state);;
+          if (!pin) return;
+          digitalWrite(pin, state);
+        } else if (( strcmp(payload, "false") == 0 ||  strcmp(payload, "0") == 0 )) {
+          int pin;
+          int state = 0;
+          if (strcmp(sensorId, "1") == 0 ) {
+            pin = OUTPUT_PIN_1;
+          } else  if (strcmp(sensorId, "2") == 0 ) {
+            pin = OUTPUT_PIN_2;
+          } else  if (strcmp(sensorId, "3") == 0 ) {
+            pin = OUTPUT_PIN_3;
+          }
+          //  aSerial.vvv().p(F("set pin : ")).p(pin).p(F(" State : ")).pln(state);;
+          if (!pin) return;
+          digitalWrite(pin, state);
         }
-        //  aSerial.vvv().p(F("set pin : ")).p(pin).p(F(" State : ")).pln(state);;
-        if (!pin) return;
-        digitalWrite(pin, state);
-      } else if (( strcmp(message.payload, "false") == 0 ||  strcmp(message.payload, "0") == 0 )) {
+      } else if ( strcmp(method, "2") == 0 ) {
         int pin;
-        int state = 0;
-        if (strcmp(message.sensorId, "1") == 0 ) {
-          pin = INPUT_PIN_1;
-        } else  if (strcmp(message.sensorId, "2") == 0 ) {
-          pin = INPUT_PIN_2;
-        } else  if (strcmp(message.sensorId, "3") == 0 ) {
-          pin = INPUT_PIN_3;
+        if (strcmp(sensorId, "1") == 0 ) {
+          pin = OUTPUT_PIN_1;
+        } else if ( strcmp(sensorId, "2") == 0 ) {
+          pin = OUTPUT_PIN_2;
+        } else if ( strcmp(sensorId, "3") == 0 ) {
+          pin = OUTPUT_PIN_3;
         }
-        //  aSerial.vvv().p(F("set pin : ")).p(pin).p(F(" State : ")).pln(state);;
         if (!pin) return;
-        digitalWrite(pin, state);
+        int val = digitalRead(pin);
+        char newPayload[10];
+        itoa(val, newPayload, 10);
+        message->set(METHOD, "1").set(PAYLOAD, newPayload);
+        aloes.sendMessage(MQTT);
       }
-    } else if ( strcmp(message.method, "2") == 0 ) {
-      int pin;
-      if (strcmp(message.sensorId, "1") == 0 ) {
-        pin = INPUT_PIN_1;
-      } else if ( strcmp(message.sensorId, "2") == 0 ) {
-        pin = INPUT_PIN_2;
-      } else if ( strcmp(message.sensorId, "3") == 0 ) {
-        pin = INPUT_PIN_3;
-      }
-      if (!pin) return;
-      int val = digitalRead(pin);
-      char payload[10];
-      itoa(val, payload, 10);
-      //  dtostrf(val, 10, 0, payload);
-      char method[5] = "1";
-      aloes.setMessage(message, method, message.omaObjectId, message.sensorId, message.omaResourceId, payload);
-      return aloes.sendMessage(config, message);
     }
+
+    return;
+  } else if (transportType == HTTP) {
+    const char* method = message->get(METHOD);
+    const char* collection = message->get(COLLECTION);
+    const char* path = message->get(PATH);
+    //  const char* body = message->get(PAYLOAD);
+
+    //  aSerial.vvv().p(F("onMessage : HTTP : ")).p(collection).p(" ").pln(path);
+    return;
   }
 }
 
-
 void setup() {
-  initDevice();
+  if (!initDevice()) {
+    return;
+  }
   setupPins();
 }
 
 void loop() {
-  deviceRoutine();
+  if (!deviceRoutine()) {
+    return;
+  }
 }
-
-

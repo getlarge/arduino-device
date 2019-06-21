@@ -17,15 +17,6 @@ void Helpers::stopTick() {
   ticker.detach();
 }
 
-void Helpers::generateId(Config &config) {
-  strcpy(config.mqttClient, config.devEui);
-  long randNumber = random(10000);
-  char randNumberBuffer[10];
-  ltoa(randNumber, randNumberBuffer, 10);
-  strcat(config.mqttClient, "-" );
-  strcat(config.mqttClient, randNumberBuffer);
-}
-
 void Helpers::setPins() {
   pinMode(STATE_LED, OUTPUT);
   digitalWrite(STATE_LED, HIGH);
@@ -58,9 +49,12 @@ void Helpers::readConfigButton() {
   if  ( buttonState == 1 ) {
     if ( millis() - buttonPressTimeStamp >= debouncerInterval ) {
       buttonPressTimeStamp = millis();
-      aSerial.vvv().pln(F("Retriggering button"));
+      aSerial.vvv().p(F("Retriggering button : ")).p(manualConfig).p(" | ").pln(callConfigMode);
       if ( manualConfig == true) {
         manualConfig = false;
+      }
+      if ( callConfigMode == true) {
+        callConfigMode = false;
       }
       else {
         manualConfig = true;
@@ -80,7 +74,8 @@ void Helpers::setReboot() { // Boot to sketch
   yield();
   delay(5000);
   aSerial.v().println(F("====== Reboot ======"));
-  ESP.reset(); //ESP.restart();
+
+  ESP.restart();//  ESP.reset();
   delay(2000);
 }
 

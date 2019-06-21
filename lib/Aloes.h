@@ -1,26 +1,82 @@
+/*
+ * Aloes.h
+ *
+ * Author:  Getlarge
+ * Created: 2019-06-10
+ */
+
 #ifndef Aloes_h
 #define Aloes_h
+
+#if defined(ESP8266) || defined(ESP32)
+#include <functional>
+#define MESSAGE_CALLBACK_SIGNATURE std::function<void(transportLayer transportType, Message *message)> msgCallback
+#else
+#define MESSAGE_CALLBACK_SIGNATURE void (*msgCallback)(transportLayer transportType, Message *message)
+#endif
+
+struct Sensor {
+	char *name;
+	char *type;
+	char *value;
+	char *nativeId;
+	char *resourceId;
+	char *id;
+	char* resources[][60];
+};
+
+// const char* resources[][60] = {
+//   { "5850", "digital_input"},
+//   { "5850", "digital_input"},
+//   { "5527", "text_input"},
+// };
 
 class Aloes {
 public:
 	Aloes();
-	void getDeviceId(Config &config);
-	void setSensors(Config &config);
-	void setSensorRoutes(Config &config, const char* objectId, const char* sensorId, const char* resourceId, size_t index);
-	void presentSensors(Config &config);
-	void setMessage(Message &message, char method[5], char objectId[5], char sensorId[4], char resourceId[5], char payload[100]);
-	bool sendMessage(Config &config, Message &message);
-	bool startStream(Config &config, Message &message, size_t length);
+	Aloes(Aloes &aloes);
+
+  void setMsgCallback(MESSAGE_CALLBACK_SIGNATURE);
+	bool initDevice(DEVICE_CALLBACK_SIGNATURE);
+  void onDeviceUpdate();
+	void initSensors();
+	void presentSensors();
+
+	char* getConfig(DeviceKeys deviceKey);
+	void setConfig(DeviceKeys deviceKey, char *value);
+	Aloes& setCnf(DeviceKeys deviceKey, char* value); 
+	char* getMsg(MessageKeys messageKey);
+	Aloes& setMsg(MessageKeys messageKey, char* value); 
+	Aloes& setMsg(MessageKeys messageKey, const char* value); 
+	Aloes& setMsg(MessageKeys messageKey, uint8_t* value, size_t length); 
+
+	void setPayload(uint8_t *payload, size_t length, const char* type);
+
+	bool sendMessage(transportLayer transportType);
+	bool sendMessage(size_t length);
+	bool startStream(size_t length);
 	virtual size_t writeStream(const uint8_t *payload, size_t length);
 	bool endStream();
-	void parseTopic(char* topic);
-	void parseMessage(byte* payload);
-#if ALOES_RECEIVE == ON
-	//	static void onReceive(char* topic, byte* payload, unsigned int length);
-	void onMessage(Message &message);
-#endif
+
+	bool parseTopic(char* topic);
+	bool parseMessage(char* payload);
+	bool parseMessage(uint8_t *payload, size_t length);
+	bool parseUrl(char *url);
+	void parseBody(char* body);
+  void parseBody(uint8_t *body, size_t length);
+  void parseBody(Stream *stream);
+
+	bool getState();
+	//	void authenticate();
+	void getFirmwareUpdate();
+
+  bool stateReceived;
+  bool sensorsPresented;
 
 private:
+	//	Sensor sensors[];
+	Message _message; 
+	MESSAGE_CALLBACK_SIGNATURE;
 };
 
 #endif

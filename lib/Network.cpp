@@ -1,8 +1,56 @@
+#include <time.h>
 #include "Network.h"
+#include "AsyncWait.h"
 
-Network::Network(Config &config) {
-  //  checkSerial();
+bool Network::reportErrors = false;
+
+void Network::setErrorCallback(ERROR_CALLBACK_SIGNATURE) {
+  reportErrors = true;
+  this->onError = onError;
 }
+
+void Network::setError(char *error) {
+  _error = error;
+  if (reportErrors && strcmp(error, "") != 0) {
+    onError(NETWORK, error);
+  }
+}
+
+void Network::setError(const char *error) {
+  setError((char*)error);
+}
+
+// Set time via NTP, as required for x.509 validation
+void Network::setClock() {
+  configTime(2 * 3600, 0, "0.fr.pool.ntp.org", "1.fr.pool.ntp.org");
+  setClock_status = STARTED;
+  aSerial.vv().pln(F("Waiting for NTP time sync "));
+  setClock_AsyncWait.startWaiting(millis(), 1000); // Log every second.
+}
+
+
+// Check Clock Status and update 'setClock_status' accordingly.
+void Network::checkClockStatus() {
+  time_t now = time(nullptr);
+  if (now < 8 * 3600 * 2) {
+      // The NTP request has not yet completed.
+      if (!setClock_AsyncWait.isWaiting(millis())) {
+        aSerial.vv().p(F("."));
+        setClock_AsyncWait.startWaiting(millis(), 1000); // Log every second.
+      }
+      //  setError("Check clock status");
+      return;
+  }
+
+  setClock_status = SUCCESS;
+  //  wifiClient.setX509Time(now);
+#if DEBUG > 0
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  aSerial.vv().pln(F("")).p(F("Current time: ")).pln(asctime(&timeinfo));
+#endif // DEBUG
+}
+
 
 void Network::checkSerial() {
   while (Serial.available() == 0 && millis() < 4000);
@@ -19,174 +67,171 @@ void Network::checkSerial() {
   }
 }
 
-void Network::connect(Config &config) {
-  String ssid = WiFi.SSID();
-  String pass = WiFi.psk();
+bool Network::isReady() {
+  return (setClock_status > FINISHED);
+}
+
+bool Network::connect() {
   //  IPAddress _ip, _gw, _sn;
-  //  _ip.fromString(config.staticIp);
-  //  _gw.fromString(config.staticGw);
-  //  _sn.fromString(config.staticSn);
-  //  String hostname(config.deviceName);
-  WiFi.hostname(config.deviceName);
-  //  WiFi.mode(WIFI_AP_STA);
+  //  _ip.fromString(device.getStaticIp());
+  //  _gw.fromString(device.getStaticGw());
+  //  _sn.fromString(device.getSstaticSn());
+  WiFi.hostname(_hostname);
   WiFi.mode(WIFI_STA);
-  helpers.startTick(0.3);
+  //  WiFi.begin(ssid, password);
+  wiFiMulti.addAP(_ssid, _password);
+  // String ssid = WiFi.SSID();
+  // String pass = WiFi.psk();
 
-  if ((strcmp(defaultWifiSSID, "") != 0) && (strcmp(defaultWifiPass, "") != 0)) {
-    aSerial.vvv().p(F("Connecting to wifi :")).pln(defaultWifiSSID);
-    WiFi.begin(defaultWifiSSID, defaultWifiPass);
-  } else {
-    aSerial.vvv().p(F("Connecting to wifi :")).pln(ssid);
-    WiFi.begin(ssid.c_str(), pass.c_str());
+  if (connected()) {
+    if (!MDNS.begin(_hostname)) {
+      setError("Failed to set up MDNS responder");
+      return false;
+    } 
+    setError("");
+    wifiFailCount = 0;
+    aSerial.vv().p(F("[NETWORK] WiFi connected. IP Address : ")).pln(WiFi.localIP());
+    // if (configMode == 1) {quitConfigMode();}
+    //  MDNS.addService("http", "tcp", 80);
+    return true;
   }
-  wifiFailCount = 0;
-
-  if (!MDNS.begin(config.deviceName)) {
-    aSerial.vvv().pln(F("Error setting up MDNS responder!"));
-  } else {
-    aSerial.vvv().pln(F("mDNS responder started"));
-  }
-
-  while (WiFi.status() != WL_CONNECTED) {
-    aSerial.vvv().p(F(" . "));
-    wifiFailCount += 1;
-    if (wifiFailCount > wifiMaxFailedCount && configMode == 0) {
-      wifiFailCount = 0;
-      callConfigMode = true;
-      return;
-      //  return manager.configManager(config);
-    }
-    delay(reconnectInterval);
-  }
-  // if (configMode == 1) {quitConfigMode();}
-  helpers.stopTick();
-  wifiFailCount = 0;
-  aSerial.vv().p(F("WiFi connected. IP Address : ")).pln(WiFi.localIP());
+  setError("Wifi connection failure");
+  return false;
 }
 
-bool Network::reconnect() {
-  WiFi.disconnect();
-  //  WiFi.mode(WIFI_AP_STA);
-  WiFi.mode(WIFI_STA);
-
-  String ssid = WiFi.SSID();
-  String pass = WiFi.psk();
-  //  IPAddress _ip, _gw, _sn;
-  //  _ip.fromString(config.staticIp);
-  //  _gw.fromString(config.staticGw);
-  //  _sn.fromString(config.staticSn);
-  aSerial.vvv().p(F("Connecting to wifi :")).pln(ssid);
-  if ((strcmp(defaultWifiSSID, "") != 0) && (strcmp(defaultWifiPass, "") != 0)) {
-    WiFi.begin(defaultWifiSSID, defaultWifiPass);
-  } else {
-    WiFi.begin(ssid.c_str(), pass.c_str());
+bool Network::asyncConnect(AsyncWait *async, MilliSec startTime, unsigned long interval) {
+  if (async->isWaiting(startTime)) {
+    return true;
   }
-  wifiFailCount = 0;
-  // Wait for connection
-  helpers.startTick(0.3);
-  for (int i = 0; i < wifiMaxFailedCount; i++) {
-    if ( WiFi.status() != WL_CONNECTED ) {
-      aSerial.vvv().p(F(" . "));
-      delay (reconnectInterval);
-    }
-  }
-  if (WiFi.status() == WL_CONNECTED && configMode == 1) {
-    callConfigMode = false;
-      //  return manager.quitConfigMode();
-  }
-  helpers.stopTick();
+  if (connect()) {
+    wifiFailCount = 0;
+    return false;
+  } 
+  if (wifiFailCount > wifiMaxFailedCount && !callConfigMode) {
+    wifiFailCount = 0;
+    callConfigMode = true;
+  } 
+  ++wifiFailCount;
+  async->startWaiting(startTime, interval);
+  return true;    
 }
 
-
-
-/// TIME
-#if NTP_SERVER == 1
-void digitalClockDisplay() {
-  aSerial.vvv().p(hour());
-  printDigits(minute());
-  printDigits(second());
-  aSerial.vvv().p("").p(day()).p(".").p(month()).p(".").pln(year());
+bool Network::asyncConnect(AsyncWait *async, MilliSec startTime) {
+  return asyncConnect(async, startTime, reconnectInterval);
 }
 
-void printDigits(int digits) {
-  // utility for digital clock display: prints preceding colon and leading 0
-  aSerial.vvv().p(":");
-  if (digits < 10)
-    aSerial.vvv().p('0');
-  aSerial.vvv().p(digits);
+bool Network::connected() {
+  return (wiFiMulti.run() == WL_CONNECTED);
+  //  return (WiFi.status() == WL_CONNECTED);
 }
 
-void Network::setup() {
-#if NTP_SERVER == 1
-  aSerial.vvv().println(F("Starting UDP"));
-  Udp.begin(localPort);
-  aSerial.vvv().print(F("Local port : ")).println(Udp.localPort());
-  aSerial.vvvv().println(F("Waiting for sync "));
-  setSyncProvider(getNtpTime);
-  setSyncInterval(300);
-  //  delay(100);
+String Network::getMacAddress() {
+    byte mac[6];
+    String macStr;
+    WiFi.macAddress(mac);
+    macStr = String(mac[0], HEX) + ":"
+           + String(mac[1], HEX) + ":"
+           + String(mac[2], HEX) + ":"
+           + String(mac[3], HEX) + ":"
+           + String(mac[4], HEX) + ":"
+           + String(mac[5], HEX);
+    
+    return macStr;
+}
+
+String Network::getDevEui() {
+    byte mac[6];
+    String devEui;
+    WiFi.macAddress(mac);
+    devEui = String(mac[0], HEX)
+           + String(mac[1], HEX)
+           + String(mac[2], HEX)
+           + String(mac[3], HEX)
+           + String(mac[4], HEX)
+           + String(mac[5], HEX);
+    devEui.toUpperCase();
+    return devEui;
+}
+
+void Network::generateId(Device &device) {
+#if ID_TYPE == 0
+#if defined(ESP8266)
+  char *espChipId;
+  float chipId = ESP.getChipId();
+  char chipIdBuffer[sizeof(chipId)];
+  espChipId = dtostrf(chipId, sizeof(chipId), 0, chipIdBuffer);
+  device.set(DEV_EUI, espChipId);
+#elif defined(ESP32)
+  uint64_t chipId;  
+  chipId = ESP.getEfuseMac();//The chip ID is essentially its MAC address(length: 6 bytes).
+  // Serial.printf("ESP32 Chip ID = %04X",(uint16_t)(chipid>>32));//print High 2 bytes
+  // Serial.printf("%08X\n",(uint32_t)chipid);//print Low 4bytes.
 #endif
-}
-
-void Network::loop() {
-#if NTP_SERVER == 1
-  if (timeStatus() != timeNotSet) {
-    if (now() != prevDisplay) { //update the display only if time has changed
-      prevDisplay = now();
-      digitalClockDisplay();
-    }
-  }
+#elif ID_TYPE == 1
+  String devEui = getDevEui();
+  //  aSerial.vvv().p(F("devEui : ")).pln(devEui);
+  device.set(DEV_EUI, (char*)devEui.c_str());
 #endif
+  //    #if ID_TYPE == 2
+  //// soyons fous, let's create an eui64 address ( like ipv6 )
+  ////      Step #1: Split the MAC address in the middle:
+  ////      Step #2: Insert FF:FE in the middle:
+  ////      Step #4: Convert the first eight bits to binary:
+  ////      Step #5: Flip the 7th bit:
+  ////      Step #6: Convert these first eight bits back into hex:
+  //    #endif
+  //  aSerial.vvv().p(F("DeviceID : ")).pln(config.devEui);
+  char mqttClientId[50];
+  strcpy(mqttClientId, device.get(DEV_EUI));
+  long randNumber = random(10000);
+  char randNumberBuffer[10];
+  ltoa(randNumber, randNumberBuffer, 10);
+  strcat(mqttClientId, "-" );
+  strcat(mqttClientId, randNumberBuffer);
+  device.set(MQTT_CLIENT_ID, mqttClientId);
 }
 
-// send an NTP request to the time server at the given address
-void Network::sendNTPpacket(IPAddress& address) {
-  aSerial.vvv().pln(F("Sending NTP packet ..."));
-  // set all bytes in the buffer to 0
-  memset(packetBuffer, 0, NTP_PACKET_SIZE);
-  // Initialize values needed to form NTP request
-  // (see URL above for details on the packets)
-  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-  packetBuffer[1] = 0;     // Stratum, or type of clock
-  packetBuffer[2] = 6;     // Polling Interval
-  packetBuffer[3] = 0xEC;  // Peer Clock Precision
-  // 8 bytes of zero for Root Delay & Root Dispersion
-  packetBuffer[12]  = 49;
-  packetBuffer[13]  = 0x4E;
-  packetBuffer[14]  = 49;
-  packetBuffer[15]  = 52;
-  // all NTP fields have been given values, now
-  // you can send a packet requesting a timestamp:
-  Udp.beginPacket(address, 123); //NTP requests are to port 123
-  Udp.write(packetBuffer, NTP_PACKET_SIZE);
-  Udp.endPacket();
-}
-
-time_t Network::getNtpTime() {
-  IPAddress ntpServerIP; // NTP server's ip address
-  while (Udp.parsePacket() > 0) ; // discard any previously received packets
-  aSerial.vv().pln(F("Transmit NTP Request"));
-  // get a random server from the pool
-  WiFi.hostByName(ntpServerName, ntpServerIP);
-  aSerial.vv().p(ntpServerName).p(" : ").pln(ntpServerIP);
-  sendNTPpacket(ntpServerIP);
-  uint32_t beginWait = millis();
-  while (millis() - beginWait < 1500) {
-    int size = Udp.parsePacket();
-    if (size >= NTP_PACKET_SIZE) {
-      aSerial.vvv().pln(F("Receiving NTP packet ..."));
-      Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
-      unsigned long secsSince1900;
-      // convert four bytes starting at location 40 to a long integer
-      secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
-      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
-      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
-      secsSince1900 |= (unsigned long)packetBuffer[43];
-      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
-    }
-  }
-  aSerial.vv().pln(F("No NTP response"));
-  return 0; // return 0 if unable to get the time
-}
-
+bool Network::setup(Device &device) {
+  //  checkSerial();
+  _hostname = device.get(DEVICE_NAME);
+#ifdef DEFAULT_WIFI_SSID
+  _ssid = DEFAULT_WIFI_SSID;
+#else
+  _ssid = WiFi.SSID().c_str();
 #endif
+#ifdef DEFAULT_WIFI_PASS
+  _password = DEFAULT_WIFI_PASS;
+#else
+  _password = WiFi.psk().c_str();
+#endif
+
+  aSerial.vv().pln(F("")).p(F("Network setup : ")).p(_ssid).p(" ").pln(_password);
+  if (connect()) {
+    return true;
+  }
+  // randomSeed(micros());
+  // setClock();
+
+// #if MANUAL_SIGNING
+//   signPubKey = new BearSSL::PublicKey(pubkey);
+//   hash = new BearSSL::HashSHA256();
+//   sign = new BearSSL::SigningVerifier(signPubKey);
+// #endif
+
+  // int numCerts = certStore.initCertStore(&certs_idx, &certs_ar);
+  // client->setCertStore(&certStore);
+  // Serial.println(numCerts);
+  return false;
+}
+
+bool Network::loop() {
+  // Prevent ALL other actions here until the clock as been set by NTP.
+  if (setClock_status < FINISHED) {
+    checkClockStatus();
+    return false;
+  }
+  if (!isReady()) {
+    return false;
+  }
+  return true;
+}

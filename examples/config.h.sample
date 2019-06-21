@@ -1,3 +1,6 @@
+#ifndef Config_h
+#define Config_h
+
 //// SKETCH
 #define SKETCH_NAME "[ALOES DEVICE]"
 #define SKETCH_VERSION "0.5"
@@ -5,49 +8,54 @@
 /// NETWORK PARAMS
 #define ID_TYPE 0 // 0 : prefix+espCHipId - 1 : prefix+MACadress - 2 : prefix+EUI-64 address
 #define CLIENT_SECURE 1
-#define MQTT_CLIENT 1
-#define WEB_SERVER 0
-#define NTP_SERVER 0
+//  #define MQTT_CLIENT_SECURE
+//  #define HTTP_CLIENT_SECURE
+#define MANUAL_SIGNING 0
 
 /// GLOBALS
 #define DEBUG 4 // from 0 to 4
+// #define PRINT_ERRORS
 #define BAUD_RATE 115200
 
 // ESP
+#if defined(ESP8266) 
 #define BOUNCE_LOCK_OUT
 #define STATE_LED       D4
 #define OTA_BUTTON_PIN  D3
 #define RELAY_SWITCH  D0
 
+#elif defined(ESP32)
+// fix pin config
+#define STATE_LED       16
+#define OTA_BUTTON_PIN  15
+#define RELAY_SWITCH    12
+#endif
+
+
 // NETWORK CONFIG
 // WiFi default config ; leave empty to use automatic Wifi config
-const char* defaultWifiSSID = ""; 
-const char* defaultWifiPass = ""; 
+#define DEFAULT_WIFI_SSID "" 
+#define DEFAULT_WIFI_PASS ""
+
+#define DEVICE_NAME "aloes-device"
+#define DEVICE_PASS ""
+
+#define DEFAULT_HTTP_API_ROOT "/api/"
+#define DEFAULT_MQTT_TOPIC_PREFIX_IN "-in"
+#define DEFAULT_MQTT_TOPIC_PREFIX_OUT "-out"
+
+
 // MQTT default config
-const char* defaultMqttServer = "192.168.1.133";
+const char* defaultMqttHost = "192.168.1.133";
 const char* defaultMqttPort = "1883";
-const char* defaultMqttUser = "";
-const char* defaultMqttPassword = "";
+const char* defaultDeviceId = "";
+const char* defaultDeviceApiKey = "";
 const char* defaultMqttTopicIn = "123456-in";
 const char* defaultMqttTopicOut = "123456-out";
 
-struct Config {
-  char deviceName[30] = "aloes-device";
-  char devEui[20];
-  char devicePass[40] = "";
-  char inPrefix[10] = "-in";
-  char outPrefix[10] = "-out";
-  char mqttServer[40];
-  char mqttPort[7];
-  char mqttClient[50];
-  char mqttUser[40];
-  char mqttPassword[70];
-  char mqttTopicOut[50];
-  char mqttTopicIn[50];
-  char staticIp[16] = "192.168.1.35";
-  char staticGw[16] = "192.168.1.254";
-  char staticSn[16] = "91.121.61.147";
-};
+// HTTP default config
+const char* defaultHttpHost = "192.168.1.128";
+const char* defaultHttpPort = "8000";
 
 // sensors to register ( max size 60 )
 // following OMA object description
@@ -57,3 +65,5 @@ const char* sensors[][60] = {
   { "3306", "1", "5850", "digital_input"},
   { "3349", "2", "5910", "buffer_input"},
 };
+
+#endif

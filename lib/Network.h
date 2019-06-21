@@ -1,41 +1,72 @@
 #ifndef Network_h
 #define Network_h
 
-#if NTP_SERVER == 1
-#include <WiFiUdp.h>
+#if defined(ESP8266) 
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266mDNS.h>
+#elif defined(ESP32)
+#include <ESPmDNS.h>
+#include <WiFiMulti.h>
 #endif
-
-#include "Helpers.h"
-//	#include "Manager.h"
 
 class Network {
 public:
-	Network(Config &config);
+	Network() { };
+    virtual ~Network() { }
+ //    ESP8266WiFiMulti & getWiFiClient() {
+ //       return WiFiMulti;
+	// }
+	//	WiFiClient getWiFiClient();
+
+	void setErrorCallback(ERROR_CALLBACK_SIGNATURE);
+	void setError(char* error);
+	void setError(const char* error);
+	
+	bool isReady();
+    void setClock();
 	void checkSerial();
-	void connect(Config &config);
-	bool reconnect();
-#if NTP_SERVER == 1
-	time_t getNtpTime();
-	time_t prevDisplay = 0; // when the digital clock was displayed
-	void digitalClockDisplay();
-	void printDigits(int digits);
-	void sendNTPpacket(IPAddress &address);
-#endif
-	void loop();
+
+	bool asyncConnect(AsyncWait *async, MilliSec startTime);
+	bool asyncConnect(AsyncWait *async, MilliSec startTime, unsigned long interval);
+	bool connect();
+	bool connected();
+
+	void generateId(Device &device);
+ 	String getMacAddress();
+ 	String getDevEui();
+
+	bool setup(Device &device);
+	bool loop();
+
 	int wifiFailCount = 0;
 	int wifiMaxFailedCount = 30;
 
 private:
-	unsigned long  reconnectInterval = 500;
-#if NTP_SERVER == 1
-	WiFiUDP Udp;
-	const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
-	byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
-	static const char ntpServerName[] = "fr.pool.ntp.org";
-	const int timeZone = 1;     // Central European Time
-	unsigned int localPort = 8888;  // local port to listen for UDP packets
-#endif
+	ERROR_CALLBACK_SIGNATURE;
+    const char *_error;
+	static bool reportErrors;
 
+#if defined(ESP8266) 
+	ESP8266WiFiMulti wiFiMulti;
+#elif defined(ESP32)
+	WiFiMulti wiFiMulti
+#endif
+	unsigned long  reconnectInterval = 1000;
+    const char *_ssid;
+    const char *_password;
+    const char *_hostname;
+
+    const char *signPubKey;
+    const char *sign;
+
+    // Note: variables of type 'status' are NEVER assigned a value of 'FINISHED'.
+    // 'FINISHED' is only used is comparisons (e.g. if(x_status>FINISHED)... ),
+    // rather than always testing for SUCCESS || FAILED.
+    enum status { NOT_STARTED, STARTED, FINISHED, SUCCESS, FAILED };
+    status setClock_status = NOT_STARTED;
+    AsyncWait setClock_AsyncWait;
+
+	void checkClockStatus();
 };
 
 #endif
