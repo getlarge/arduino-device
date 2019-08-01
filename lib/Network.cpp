@@ -76,7 +76,12 @@ bool Network::connect() {
   //  _ip.fromString(device.getStaticIp());
   //  _gw.fromString(device.getStaticGw());
   //  _sn.fromString(device.getSstaticSn());
+#if defined(ESP8266) 
   WiFi.hostname(_hostname);
+#elif defined(ESP32)
+  WiFi.setHostname(_hostname);
+#endif
+
   WiFi.mode(WIFI_STA);
   //  WiFi.begin(ssid, password);
   wiFiMulti.addAP(_ssid, _password);

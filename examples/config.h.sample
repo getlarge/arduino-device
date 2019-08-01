@@ -6,10 +6,8 @@
 #define SKETCH_VERSION "0.5"
 
 /// NETWORK PARAMS
-#define ID_TYPE 0 // 0 : prefix+espCHipId - 1 : prefix+MACadress - 2 : prefix+EUI-64 address
-#define CLIENT_SECURE 1
-//  #define MQTT_CLIENT_SECURE
-//  #define HTTP_CLIENT_SECURE
+#define ID_TYPE 1 // 0 : prefix+espCHipId - 1 : prefix+MACadress - 2 : prefix+EUI-64 address
+#define CLIENT_SECURE 0
 #define MANUAL_SIGNING 0
 
 /// GLOBALS
@@ -33,29 +31,32 @@
 
 
 // NETWORK CONFIG
-// WiFi default config ; leave empty to use automatic Wifi config
+// WiFi default config ; leave empty to use Portal config
 #define DEFAULT_WIFI_SSID "" 
 #define DEFAULT_WIFI_PASS ""
 
-#define DEVICE_NAME "aloes-device"
-#define DEVICE_PASS ""
+#define DEFAULT_DEVICE_NAME "aloes-device"
+#define DEFAULT_DEVICE_PASS ""
 
 #define DEFAULT_HTTP_API_ROOT "/api/"
 #define DEFAULT_MQTT_TOPIC_PREFIX_IN "-in"
 #define DEFAULT_MQTT_TOPIC_PREFIX_OUT "-out"
 
 
-// MQTT default config
-const char* defaultMqttHost = "192.168.1.133";
-const char* defaultMqttPort = "1883";
 const char* defaultDeviceId = "";
 const char* defaultDeviceApiKey = "";
+
+const char* defaultHttpHost = "192.168.1.128";
+const char* defaultHttpPort = "8000";
+bool defaultHttpSecure = 0;
+
+const char* defaultMqttHost = "192.168.1.133";
+const char* defaultMqttPort = "1883";
+bool defaultMqttSecure = 0;
+
 const char* defaultMqttTopicIn = "123456-in";
 const char* defaultMqttTopicOut = "123456-out";
 
-// HTTP default config
-const char* defaultHttpHost = "192.168.1.128";
-const char* defaultHttpPort = "8000";
 
 // sensors to register ( max size 60 )
 // following OMA object description

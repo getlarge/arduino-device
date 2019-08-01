@@ -9,6 +9,7 @@ unsigned int Manager::portalTimeout = DEFAULT_PORTAL_TIMEOUT * 1000;
 int Manager::configCount = 0;
 
 Manager::Manager(Device &device) {
+  customDeviceName = new WiFiManagerParameter("device_name", "device name", device.get(DEVICE_NAME), device.getSize(DEVICE_NAME));
   customDeviceId = new WiFiManagerParameter("device_id", "device id", device.get(DEVICE_ID), device.getSize(DEVICE_ID));
   customDeviceApiKey = new WiFiManagerParameter("apikey", "apikey", device.get(API_KEY), device.getSize(API_KEY));
   customHttpHost = new WiFiManagerParameter("http_host", "http host", device.get(HTTP_HOST), device.getSize(HTTP_HOST));
@@ -18,6 +19,7 @@ Manager::Manager(Device &device) {
   customMqttPort = new WiFiManagerParameter("mqtt_port", "mqtt port", device.get(MQTT_PORT), device.getSize(MQTT_PORT));
   customMqttSecure = new WiFiManagerParameter("mqtt_secure", "mqtt secure", device.get(MQTT_SECURE), device.getSize(MQTT_SECURE));
 //  new (&customHttpPort) WiFiManagerParameter("http_port", "http port", config.httpPort, sizeof(config.httpPort));
+  wifiManager.addParameter(customDeviceName);
   wifiManager.addParameter(customDeviceId);
   wifiManager.addParameter(customDeviceApiKey);
   wifiManager.addParameter(customHttpHost);
@@ -43,7 +45,7 @@ void Manager::saveConfigCallback() {
 bool Manager::setConfig() {
  // device.set("mqttHost", getParam("mqtt_host"));
   // todo validate settings
-  device.set(API_KEY, customDeviceApiKey->getValue()).set(DEVICE_ID, customDeviceId->getValue());
+  device.set(DEVICE_NAME, customDeviceName->getValue()).set(API_KEY, customDeviceApiKey->getValue()).set(DEVICE_ID, customDeviceId->getValue());
   device.set(HTTP_HOST, customHttpHost->getValue()).set(HTTP_PORT, customHttpPort->getValue()).set(HTTP_SECURE, customHttpSecure->getValue());
   device.set(MQTT_HOST, customMqttHost->getValue()).set(MQTT_PORT, customMqttPort->getValue()).set(MQTT_SECURE, customMqttSecure->getValue());
   return true;
@@ -76,6 +78,7 @@ void Manager::handleRoute() {
 }
 
 void Manager::startPortal() {
+  customDeviceName->setValue(device.get(DEVICE_NAME), device.getSize(DEVICE_NAME));
   customDeviceId->setValue(device.get(DEVICE_ID), device.getSize(DEVICE_ID));
   customDeviceApiKey->setValue(device.get(API_KEY), device.getSize(API_KEY));
   customHttpHost->setValue(device.get(HTTP_HOST), device.getSize(HTTP_HOST));

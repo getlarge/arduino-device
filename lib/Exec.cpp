@@ -1,25 +1,34 @@
 #include "Exec.h"
 
 void onMQTTMessage(char* topic, uint8_t* payload, unsigned int length) {
+  // execMQTTCallback = true;
   aSerial.vv().println(F("====== [MQTT] message ======"));
   //  aSerial.vv().p(F("Topic : ")).pln((const char*)topic);
-  if (!aloes.parseTopic(topic)) {
+  if (!aloes.parseRoute(MQTT, topic)) {
     onErrorCallback(EXEC, (char*)"Failed to parse topic.");
     return;
   }
-  if (!aloes.parseMessage(payload, length)) {
+  if (!aloes.parseMessage(MQTT, payload, length)) {
     onErrorCallback(EXEC, (char*)"Failed to parse payload.");
+    return;
   }
 }
 
 void onHTTPMessage(char* url, uint8_t* body, unsigned int length) {
+  // execHTTPCallback = true;
+#ifndef NO_HTTP_CLIENT_FEATURE
   aSerial.vv().println(F("====== [HTTP] message ======"));
   // if contenttype = json
-  if (!aloes.parseUrl(url)) {
+  if (!aloes.parseRoute(HTTP, url)) {
     onErrorCallback(EXEC, (char*)"Failed to parse url.");
     return;
   }
-  aloes.parseBody(body, length);
+  if (!aloes.parseMessage(HTTP, body, length)) {
+    onErrorCallback(EXEC, (char*)"Failed to parse body.");
+    return;
+  }
+  // execHTTPCallback = false;
+#endif
 }
 
 void onDeviceUpdate() {
@@ -113,11 +122,15 @@ bool initDevice() {
 
   _network.generateId(device);
 
+  aSerial.vv().print(F("DEV_EUI : ")).println(device.get(DEV_EUI));
+  aSerial.vv().print(F("CLIENT ID : ")).println(device.get(MQTT_CLIENT_ID));
+
   if (!aloes.initDevice(onDeviceUpdate)) {
     onErrorCallback(EXEC, (char*)"Failed to init device, fix your device configuration.");
     return false;
   }
-  aloes.initSensors();
+
+  //  aloes.initSensors();
 
   if (!_network.setup(device)) {
     onErrorCallback(EXEC, (char*)"Failed to connect to WiFi AP, update your configuration.");
@@ -137,9 +150,9 @@ bool initDevice() {
   aloes.setMsgCallback(onMessage);
 
   // to receive error messages
-  device.setErrorCallback(onErrorCallback);
-  _network.setErrorCallback(onErrorCallback);
-  _transport.setErrorCallback(onErrorCallback);
+  //  device.setErrorCallback(onErrorCallback);
+  //  _network.setErrorCallback(onErrorCallback);
+  //  _transport.setErrorCallback(onErrorCallback);
 
   manager.setup();
 
@@ -205,23 +218,7 @@ bool deviceRoutine() {
     return false;
   }
 
-  if (!_transport.connected(MQTT)) {
-     //  helpers.startTick(0.3);
-    MilliSec lastMQTTConnAttempt = millis();
-    static AsyncWait asyncMQTT;
-    if (!callConfigMode) {
-      if (_transport.asyncConnect(MQTT, &asyncMQTT, lastMQTTConnAttempt, 2000)) {
-        return false;
-      }
-    } else {
-      asyncMQTT.cancel();
-    }
-    return false;
-  }
-
-  _transport.loop(device);
-
-
+#ifndef NO_HTTP_CLIENT_FEATURE
   if (!aloes.stateReceived && !callConfigMode) {
     MilliSec lastStateReqAttempt = millis();
     static AsyncWait retryGetState;
@@ -232,6 +229,35 @@ bool deviceRoutine() {
       retryGetState.startWaiting(lastStateReqAttempt, 5000);
       return false;
     }
+  }
+#endif
+
+  if (!callConfigMode && !_transport.connected(MQTT)) {
+     //  helpers.startTick(0.3);
+    MilliSec lastMQTTConnAttempt = millis();
+    static AsyncWait asyncMQTT;
+    if (asyncMQTT.isWaiting(lastMQTTConnAttempt)) {
+      return false;
+    }
+    if (_transport.mqttFailCount > _transport.mqttMaxFailedCount && !callConfigMode) {
+      _transport.mqttFailCount = 0;
+      callConfigMode = true;
+      asyncMQTT.cancel();
+      return false;
+    }
+    if ( !_transport.connect(MQTT)) {
+      ++_transport.mqttFailCount;
+      asyncMQTT.startWaiting(lastMQTTConnAttempt, 5000);
+      return false;
+    }
+    //  if (_transport.asyncConnect(MQTT, &asyncMQTT, lastMQTTConnAttempt, 2000)) {
+      //  asyncMQTT.cancel();
+      //  return false;
+    //  }
+  }
+  
+  if (!_transport.loop(device)) {
+    return false;
   }
 
   if (!aloes.sensorsPresented) {

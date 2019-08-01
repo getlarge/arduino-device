@@ -81,7 +81,7 @@ char* Message::getPayload() {
 
 void Message::setPayload(char *payload) {
   int x = 0;
-  _payload = new char[sizeof(payload) + 1];
+  _payload = new char[strlen(payload) + 1];
   do {
     _payload[x] = payload[x];
   } while (payload[x++] != '\0');
@@ -96,7 +96,6 @@ void Message::setPayload(uint8_t *payload, size_t length) {
     _payload[x] = payload[x];
   } while (payload[x++] != '\0');
   //  _payload = (char*)payload;
-  //  aSerial.vvvv().p(F("[MESSAGE] setPayload: ")).pln(_payload);
 }
 
 void Message::setPayload(uint8_t *payload, size_t length, const char* type) {
@@ -265,7 +264,7 @@ void Message::setKV(MessageKeys messageKey, char *value) {
       break;
     }
     case PATH: {
-    setPath(value);
+      setPath(value);
       break;
     }
     case PARAM: {
@@ -292,14 +291,20 @@ Message& Message::set(MessageKeys messageKey, const char* value) {
   return *this;  
 }
 
-Message& Message::set(MessageKeys messageKey, uint8_t* value, size_t length) {
-  int x = 0;
-  value[length] = '\0';
-  char newValue[length + 1];
-   do {
-    newValue[x] = value[x];
-  } while (value[x++] != '\0');
 
+Message& Message::set(MessageKeys messageKey, uint8_t* value, size_t length) {
+  value[length] = '\0';
+  // char *newValue;
+  // newValue = (char*)value;
+  
+  // int x = 0;
+  char *newValue = new char[length + 1];
+  // do {
+  //   newValue[x] = value[x];
+  // } while (value[x++] != '\0');
+
+  strlcpy(newValue, (char*)value, length + 1);
+  aSerial.vvvv().p(F("[MESSAGE] setMessage res: ")).pln(newValue).p(F(" length: ")).pln(strlen(newValue));
   setKV(messageKey, newValue);
   return *this;  
 }

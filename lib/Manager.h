@@ -10,7 +10,7 @@
 
 #include <WiFiManager.h>
 
-#define DEFAULT_PORTAL_TIMEOUT 30
+#define DEFAULT_PORTAL_TIMEOUT 60
 
 WiFiManager wifiManager;
 
@@ -38,14 +38,17 @@ public:
  
 private:
 	//	WiFiManager wifiManager;
-	WiFiManagerParameter *customMqttHost;
-	WiFiManagerParameter *customMqttPort;
-	WiFiManagerParameter *customMqttSecure;
+	WiFiManagerParameter *customDeviceName;
 	WiFiManagerParameter *customDeviceId;
 	WiFiManagerParameter *customDeviceApiKey;
+
 	WiFiManagerParameter *customHttpHost;
 	WiFiManagerParameter *customHttpPort;
 	WiFiManagerParameter *customHttpSecure;
+
+	WiFiManagerParameter *customMqttHost;
+	WiFiManagerParameter *customMqttPort;
+	WiFiManagerParameter *customMqttSecure;
 
 	static bool portalRunning;
 	static bool startAP;

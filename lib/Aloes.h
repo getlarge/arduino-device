@@ -58,13 +58,13 @@ public:
 	virtual size_t writeStream(const uint8_t *payload, size_t length);
 	bool endStream();
 
-	bool parseTopic(char* topic);
-	bool parseMessage(char* payload);
-	bool parseMessage(uint8_t *payload, size_t length);
 	bool parseUrl(char *url);
-	void parseBody(char* body);
-  void parseBody(uint8_t *body, size_t length);
-  void parseBody(Stream *stream);
+	bool parseTopic(char* topic);
+	bool parseRoute(transportLayer transportType, char* route);
+	bool parseBody(uint8_t *body, size_t length);
+  //	void parseBody(Stream *stream);
+  bool parsePayload(uint8_t *payload, size_t length);
+	bool parseMessage(transportLayer transportType, uint8_t *message, size_t length);
 
 	bool getState();
 	//	void authenticate();

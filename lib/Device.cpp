@@ -4,9 +4,9 @@ bool Device::reportErrors = false;
 
 Device::Device() {
 
-#ifdef DEFAULT_DEVICE_NAME
-  setName((char*)DEFAULT_DEVICE_NAME);
-#endif
+// #ifdef DEFAULT_DEVICE_NAME
+//   setName((char*)DEFAULT_DEVICE_NAME);
+// #endif
 #ifdef DEFULT_DEVICE_PASS
   setPass((char*)DEFULT_DEVICE_PASS);
 #endif
@@ -530,47 +530,54 @@ Device& Device::set(DeviceKeys deviceKey, const char* value) {
 // Storage sync
 bool Device::setInstance(uint8_t *buffer, size_t length) {
   // use arduinojson.org/v6/assistant
+  aSerial.vvvv().pln(F("[DEVICE] setInstance"));
+
   int objectSize = 6;
   int bufferSize = 180; // 180
   const size_t capacity = JSON_OBJECT_SIZE(objectSize) + bufferSize;
   DynamicJsonDocument doc(capacity);
   DeserializationError error = deserializeJson(doc, buffer, length);
   if (error) {
-    char err[150];
-    strlcpy(err, error.c_str(), sizeof(err));
-    setError(err);
+    aSerial.vvvv().p(F("[DEVICE] setInstance :err : ")).pln(error.c_str());
+    // char err[150];
+    // strlcpy(err, error.c_str(), sizeof(err));
+    // setError(err);
     return false;
   }
+  aSerial.vvvv().pln(F("[DEVICE] setInstance :2"));
+
   JsonObject obj = doc.as<JsonObject>();
   const char* name = obj["name"]; 
   if(name != nullptr) {
-    set(DEVICE_NAME, name);
+    //  set(DEVICE_NAME, name);
   }
   const char* devEui = obj["devEui"]; 
   // const char* type = doc["type"];
   // bool status = doc["status"];
-  // setCnf("deviceName", (char*)name).setCnf("devEui", (char*)devEui);
   aSerial.vvvv().pln(F("[ALOES] set Device : ")).p("  devEui : ").pln(devEui).p(F("  name : ")).pln(name);
   //  setError("");
   return true;
 }
 
-bool Device::setInstance(char *instance) {
+bool Device::setInstance(const char *instance) {
   // use arduinojson.org/v6/assistant
+  aSerial.vvvv().p(F("[DEVICE] setInstance : ")).pln(instance);
   int objectSize = 6;
   int bufferSize = 180; // 180
   const size_t capacity = JSON_OBJECT_SIZE(objectSize) + bufferSize;
-  DynamicJsonDocument doc(capacity);
+  DynamicJsonDocument doc(capacity * 2);
   DeserializationError error = deserializeJson(doc, instance);
-  JsonObject obj = doc.as<JsonObject>();
   if (error) {
-    char err[150];
-    strlcpy(err, error.c_str(), sizeof(err));
-    setError(err);
+    aSerial.vvvv().p(F("[DEVICE] setInstance :err : ")).pln(error.c_str());
+    // char err[200];
+    // strlcpy(err, error.c_str(), sizeof(err));
+    // setError(err);
     return false;
   }
-  const char* name = obj["name"]; 
-  const char* devEui = obj["devEui"]; 
+  //  JsonObject obj = doc.as<JsonObject>();
+  aSerial.vvvv().pln(F("[DEVICE] setInstance :2"));
+  const char* name = doc["name"]; 
+  const char* devEui = doc["devEui"]; 
   aSerial.vvvv().pln(F("[ALOES] set Device : ")).p("  devEui : ").pln(devEui).p(F("  name : ")).pln(name);
   //  setError("");
   return true;
@@ -604,9 +611,10 @@ bool Device::loadConfig(const String fileName) {
       }
       aSerial.v().pln();
 #endif
+      const char* deviceName = obj["deviceName"];
       const char* deviceId = obj["deviceId"];
       const char* apiKey = obj["deviceApiKey"];
-      set(DEVICE_ID, deviceId).set(API_KEY, apiKey);
+      set(DEVICE_NAME, deviceName).set(DEVICE_ID, deviceId).set(API_KEY, apiKey);
       const char* httpHost = obj["httpHost"];
       const char* httpPort = obj["httpPort"];
       const char* httpSecure = obj["httpSecure"];
@@ -633,7 +641,7 @@ bool Device::loadConfig(const String fileName) {
 }
 
 bool Device::initConfig() {
-  set(DEVICE_ID, defaultDeviceId).set(API_KEY, defaultDeviceApiKey);
+  set(DEVICE_NAME, DEFAULT_DEVICE_NAME).set(DEVICE_ID, defaultDeviceId).set(API_KEY, defaultDeviceApiKey);
   set(HTTP_PORT, defaultHttpPort).set(HTTP_HOST, defaultHttpHost).set(HTTP_SECURE, BoolToChar(defaultHttpSecure));
   set(MQTT_PORT, defaultMqttPort).set(MQTT_HOST, defaultMqttHost).set(MQTT_SECURE, BoolToChar(defaultMqttSecure));
   set(MQTT_TOPIC_IN, defaultMqttTopicIn).set(MQTT_TOPIC_OUT, defaultMqttTopicOut);
@@ -662,6 +670,7 @@ bool Device::init() {
 
 bool Device::saveConfig() {
   DynamicJsonDocument obj(objBufferSize * 2);
+  obj["deviceName"] = getName();
   obj["deviceId"] = getDeviceId();
   obj["deviceApiKey"] = getApiKey();
   obj["httpHost"] = getHTTPHost();

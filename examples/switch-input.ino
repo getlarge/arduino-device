@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if CLIENT_SECURE == 1 && defined(HTTP_CLIENT_SECURE) || defined(MQTT_CLIENT_SECURE)
+#if CLIENT_SECURE == 1
 #include "secure-credentials.h"
 #endif
 // const char* sensors[][60] = {
@@ -60,6 +60,15 @@ void readButton(Bounce *instance, int btnState, unsigned long timestamp) {
       return;
     }
   }
+}
+
+//  CALLED on errors
+void onError(modules module, char* error) {
+//  if (module == EXEC) {
+//    aSerial.vv().p(F("[EXEC] error : ")).pln(error);
+//  } else if (module == TRANSPORT) {
+//    aSerial.vv().p(F("[TRANSPORT] error : ")).pln(error);
+//  }
 }
 
 // CALLED on incoming http/mqtt/serial message

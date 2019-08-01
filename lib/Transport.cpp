@@ -91,7 +91,7 @@ bool Transport::setupMQTT(Device &device) {
 
   if (strcmp(device.get(MQTT_SECURE), "true") == 0) {
     _mqttSecure = true;
-#if CLIENT_SECURE == 1
+#if CLIENT_SECURE == 1 
     _mqttClient.setClient(_client2S);
 #if CA_CERT == 1
     BearSSL::X509List x509CaCert(CA_CERT_PROG);
@@ -229,6 +229,9 @@ bool Transport::connectMQTT() {
       aSerial.vvv().p(F("[MQTT] Connecting to mqtt://"));
     }
     aSerial.vvv().p(_mqttHost).p(":").pln(_mqttPort);
+
+    // boolean connect (_mqttClientId, _userId, _apiKey, willTopic, willQoS, willRetain, willMessage, cleanSession)
+    
     if (_mqttClient.connect(_mqttClientId, _userId, _apiKey)) {
       aSerial.vvv().p(F("[MQTT] Connected to broker as : ")).pln(_mqttClientId);
       mqttFailCount = 0;
@@ -283,13 +286,13 @@ bool Transport::asyncConnectMQTT(AsyncWait *async, MilliSec startTime, unsigned 
   if (connect(MQTT)) {
     mqttFailCount = 0;
     async->cancel();
-    return false;
+    return true;
   }
   if (mqttFailCount > mqttMaxFailedCount && !callConfigMode) {
     mqttFailCount = 0;
     callConfigMode = true;
-    async->cancel();
-    return false;
+    //  async->cancel();
+    //  return false;
   }
   ++mqttFailCount;
   async->startWaiting(startTime, interval);
@@ -444,8 +447,8 @@ void Transport::parseStream(const char *url, size_t length) {
   unsigned char buffer[bufferSize];
   int pushedBufferSize = 0;
   Stream *_stream = _httpClient.getStreamPtr();
-  _stream->setTimeout(bufferSize * 2);
-  //  _stream->setTimeout(5000);
+  //  _stream->setTimeout(bufferSize * 2);
+  _stream->setTimeout(3000);
 
   String contentType = _httpClient.header("Content-Type");
   aSerial.vvvv().p(F("[HTTP] contentType : ")).pln(contentType);
@@ -471,8 +474,9 @@ void Transport::parseStream(const char *url, size_t length) {
     }
     delay(1);
   }
-  httpCallback((char*)url, buffer, bufferSize);  
-
+  if (httpCallback) {
+    httpCallback((char*)url, buffer, bufferSize);  
+  }
 }
 
 bool Transport::setRequest(const char* method, const char *url, const char *payload) {
@@ -507,9 +511,7 @@ bool Transport::setRequest(const char* method, const char *url, const char *payl
     _httpClient.collectHeaders(keys, 1);
     
     setRequestHeaders();
-
     int httpCode = sendRequest(atoi(method), payload);
-    //  httpStream((char*)url, &response);  
 
     if (httpCode > 0) {
       aSerial.vvv().p(F("[HTTP] Status : ")).pln(httpCode);
@@ -544,6 +546,7 @@ void Transport::getUpdated(int which, const char* host, int port, const char* ur
    //  Update.installSignature(transport.hash, trasnport.sign);
 #endif
 
+#if defined(ESP8266) 
     //  updateFile(otaFile, otaSignal);
     //  ESPhttpUpdate.rebootOnUpdate(true);
     ESPhttpUpdate.setLedPin(STATE_LED, LOW);
@@ -558,8 +561,6 @@ void Transport::getUpdated(int which, const char* host, int port, const char* ur
     } else {
       ret = ESPhttpUpdate.update(_client, host, port, url);
     }
-
-#if defined(ESP8266) 
 
    switch (ret) {
      case HTTP_UPDATE_FAILED:

@@ -96,7 +96,7 @@ public:
     Device& set(DeviceKeys deviceKey, const char* value); 
 
     bool setInstance(uint8_t *buffer, size_t length);
-    bool setInstance(char *instance);
+    bool setInstance(const char *instance);
 	bool loadConfig(const String filename);
 	bool initConfig();
 	bool saveConfig();
@@ -125,18 +125,18 @@ private:
 
 	static const size_t _httpHostSize = 40;
 	char _httpHost[_httpHostSize];
-	static const size_t _httpPortSize = 5;
+	static const size_t _httpPortSize = 6;
 	char _httpPort[_httpPortSize];
-	static const size_t _httpSecureSize = 5;
+	static const size_t _httpSecureSize = 6;
 	char _httpSecure[_httpSecureSize];
 	static const size_t _httpApiRootSize = 50;
 	char _httpApiRoot[_httpApiRootSize];
 
 	static const size_t _mqttHostSize = 40;
 	char _mqttHost[_mqttHostSize];
-	static const size_t _mqttPortSize = 5;
+	static const size_t _mqttPortSize = 6;
 	char _mqttPort[_mqttPortSize];
-	static const size_t _mqttSecureSize = 5;
+	static const size_t _mqttSecureSize = 6;
 	char _mqttSecure[_mqttSecureSize];
 	static const size_t _mqttClientIdSize = 50;
 	char _mqttClientId[_mqttClientIdSize];

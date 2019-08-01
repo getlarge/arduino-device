@@ -49,7 +49,7 @@ private:
 #if defined(ESP8266) 
 	ESP8266WiFiMulti wiFiMulti;
 #elif defined(ESP32)
-	WiFiMulti wiFiMulti
+	WiFiMulti wiFiMulti;
 #endif
 	unsigned long  reconnectInterval = 1000;
     const char *_ssid;

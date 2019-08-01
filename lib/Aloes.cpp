@@ -159,15 +159,48 @@ bool Aloes::endStream() {
   return false;
 }
 
+
+bool Aloes::parseUrl(char *url) {
+  char *str, *p;
+  uint8_t i = 0;
+  aSerial.vvvv().p(F("[ALOES] parseUrl : ")).pln(url);
+  if (url != strstr(url, device.get(HTTP_API_ROOT))) {
+    //  Serial.print("error in the protocol");
+    return false;
+  }
+  // pattern = "apiRoot/+collection/+path/#param"
+  for (str = strtok_r(url + 1, "/", &p); str && i <= 3; str = strtok_r(NULL, "/", &p)) {
+    switch (i) {
+      case 0: {
+        // apiRoot
+        break;
+      }
+      case 1: {
+        _message.set(COLLECTION, str);
+        break;
+      }
+      case 2: {
+        _message.set(PATH, str);
+        break;
+      }
+      case 3: {
+        _message.set(PARAM, str);
+        break;
+      }
+    }
+    i++;
+  }
+  return true;
+}
+
 bool Aloes::parseTopic(char* topic) {
   char *str, *p;
   uint8_t i = 0;
-  // first sanity check
-   if (topic != strstr(topic, device.get(MQTT_TOPIC_IN))) {
-     Serial.print("error in the protocol");
-     return false;
-   }
-
+  aSerial.vvvv().p(F("[ALOES] parseTopic : ")).pln(topic);
+  if (topic != strstr(topic, device.get(MQTT_TOPIC_IN))) {
+    //  Serial.print("error in the protocol");
+    return false;
+  }
   // pattern = "prefixedDevEui/+method/+objectId/+sensorId/+resourceId",
   for (str = strtok_r(topic + 1, "/", &p); str && i <= 4; str = strtok_r(NULL, "/", &p)) {
     switch (i) {
@@ -197,32 +230,37 @@ bool Aloes::parseTopic(char* topic) {
   return true;
 }
 
-bool Aloes::parseMessage(char *payload) {
-  bool foundSensor = false;
-  for (size_t i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++) {
-    const char** sensor = sensors[i];
-    char objectId[5];
-    char sensorId[4];
-    for (size_t j = 0; sensor[j]; j++) {
-      if (j == 0 ) {
-        strlcpy(objectId, sensor[j], sizeof(objectId));
-      } else if (j == 1 ) {
-        strlcpy(sensorId, sensor[j], sizeof(sensorId));
-      }
-    }
-    if (strcmp(_message.get(OBJECT_ID), objectId) == 0 && strcmp(_message.get(SENSOR_ID), sensorId) == 0) {
-      foundSensor = true;
-    }
-  }
-  if (foundSensor) {
-    _message.set(PAYLOAD, payload);
-     msgCallback(MQTT, &_message);
-     return true;
+bool Aloes::parseRoute(transportLayer transportType, char *route) {
+  if (transportType == HTTP) {
+    return parseUrl(route);
+  } else if (transportType == MQTT) {
+    return parseTopic(route);
   }
   return false;
 }
 
-bool Aloes::parseMessage(uint8_t *payload, size_t length) {
+bool Aloes::parseBody(uint8_t *body, size_t length) {
+  aSerial.vvvv().p(F("[ALOES] parseBody : ")).pln(length);
+  //  setMsg(PAYLOAD, body, length);
+  if (strcmp(_message.get(COLLECTION), "Devices") == 0 && strcmp(_message.get(PATH), "get-state") == 0) {
+    if (device.setInstance(body, length)) {
+      aSerial.vvvv().pln(F("[ALOES] parseBody 3 "));
+      if (!stateReceived) {
+        stateReceived = true;
+      }
+    } 
+    return true;
+  }
+  _message.set(PAYLOAD, body, length);
+  aSerial.vvv().p(F("[ALOES] parseBody : ")).pln(_message.get(PAYLOAD));
+  if (msgCallback) {
+    msgCallback(HTTP, &_message);
+  }
+  return true;
+}
+
+bool Aloes::parsePayload(uint8_t *payload, size_t length) {
+  aSerial.vvvv().p(F("[ALOES] parsePayload : ")).pln(length);
   bool foundSensor = false;
   for (size_t i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++) {
     const char** sensor = sensors[i];
@@ -241,82 +279,22 @@ bool Aloes::parseMessage(uint8_t *payload, size_t length) {
   }
   if (foundSensor) {
     setMsg(PAYLOAD, payload, length);
-    msgCallback(MQTT, &_message);
+    if (msgCallback) {
+      msgCallback(MQTT, &_message);
+    }
     return true;
   }
   return false;
 }
 
-bool Aloes::parseUrl(char *url) {
-  char *str, *p;
-  uint8_t i = 0;
-  // pattern = "apiRoot/+collection/+path/#param"
-  if (url != strstr(url, device.get(HTTP_API_ROOT))) {
-    //  Serial.print("error in the protocol");
-    return false;
-  }
 
-  for (str = strtok_r(url + 1, "/", &p); str && i <= 3; str = strtok_r(NULL, "/", &p)) {
-    switch (i) {
-      case 0: {
-        // apiRoot
-        break;
-      }
-      case 1: {
-        _message.set(COLLECTION, str);
-        break;
-      }
-      case 2: {
-        _message.set(PATH, str);
-        break;
-      }
-      case 3: {
-        _message.set(PARAM, str);
-        break;
-      }
-    }
-    i++;
+bool Aloes::parseMessage(transportLayer transportType, uint8_t *message, size_t length) {
+  if (transportType == HTTP) {
+    return parseBody(message, length);
+  } else if (transportType == MQTT) {
+    return parsePayload(message, length);
   }
-  return true;
-}
-
-void Aloes::parseBody(char *body) {
-  _message.set(PAYLOAD, body);
-  if (strcmp(_message.get(COLLECTION), "Devices") == 0) {
-    //  if (strcmp(path, "get-state") == 0) { }
-    if (device.setInstance(body)) {
-      if (!stateReceived) {
-        stateReceived = true;
-      }
-    } else {
-     //  aSerial.vvvv().pln(F("[ALOES] device setting failed: ")).pln(device._deviceError);
-    }
-  }
-  msgCallback(HTTP, &_message);
-}
-
-void Aloes::parseBody(uint8_t *body, size_t length) {
-  //  const char* path = _message.getPath();
-  setMsg(PAYLOAD, body, length);
-  if (strcmp(_message.get(COLLECTION), "Devices") == 0) {
-    if (device.setInstance(body, length)) {
-      if (!stateReceived) {
-        stateReceived = true;
-      }
-    } else {
-     //  aSerial.vvvv().pln(F("[ALOES] device setting failed: ")).pln(device._deviceError);
-    }
-  }
-
-  aSerial.vvv().p(F("[ALOES] parseBody : ")).pln(_message.get(PAYLOAD));
-  msgCallback(HTTP, &_message);
-}
-
-void Aloes::parseBody(Stream *stream) {
-  //  const char* path = _message.getPath();
-  if (strcmp(_message.get(COLLECTION), "Devices") == 0) {
-  }
-  msgCallback(HTTP, &_message);
+  return false;
 }
 
 bool Aloes::getState() {

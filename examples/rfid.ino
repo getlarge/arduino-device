@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if CLIENT_SECURE == 1 && defined(HTTP_CLIENT_SECURE) || defined(MQTT_CLIENT_SECURE)
+#if CLIENT_SECURE == 1
 #include "secure-credentials.h"
 #endif
 
