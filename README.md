@@ -57,12 +57,15 @@ Requires the next libraries :
 	- <Update.h>
 	- <SPIFFS.h>
 
+Starting from Arduino IDE 1.8.10, dependencies can be automatically installed.
+
+Starting from arduino-cli 0.7.0, dependencies can be automatically installed with `arduino-cli lib install`
 
 ## Installation
 
 - Via git, clone into your `~/Arduino/Libraries` folder
 ```bash 
-git clone https://framagit.org/aloes/arduino-device-mqtt.git 
+git clone https://framagit.org/aloes/arduino-device.git 
 ```
 
 - Via Arduino Library Manager, look for AloesDevice
