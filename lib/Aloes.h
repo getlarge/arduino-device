@@ -8,75 +8,67 @@
 #ifndef Aloes_h
 #define Aloes_h
 
-#if defined(ESP8266) || defined(ESP32)
-#include <functional>
-#define MESSAGE_CALLBACK_SIGNATURE std::function<void(transportLayer transportType, Message *message)> msgCallback
-#else
-#define MESSAGE_CALLBACK_SIGNATURE void (*msgCallback)(transportLayer transportType, Message *message)
-#endif
-
-struct Sensor {
-	char *name;
-	char *type;
-	char *value;
-	char *nativeId;
-	char *resourceId;
-	char *id;
-	char* resources[][60];
-};
-
-// const char* resources[][60] = {
-//   { "5850", "digital_input"},
-//   { "5850", "digital_input"},
-//   { "5527", "text_input"},
-// };
+#include "Device.cpp"
+#include "Message.cpp"
+#include "Transport.cpp"
 
 class Aloes {
 public:
-	Aloes();
-	Aloes(Aloes &aloes);
+  Aloes();
+  Transport *client = 0;
+  Device *device = 0;
+
+  bool init(void (*deviceUpdateCb)(), ERROR_CALLBACK_SIGNATURE);
 
   void setMsgCallback(MESSAGE_CALLBACK_SIGNATURE);
-	bool initDevice(DEVICE_CALLBACK_SIGNATURE);
+  void setMsgCallback(MESSAGE_CALLBACK_SIGNATURE, MQTT_CALLBACK, HTTP_CALLBACK);
+
+#if defined(ESP8266) || defined(ESP32)
+#include <functional>
+  std::function<void(transportLayer type, Message *message)> onMessage;
+  std::function<void(modules moduleName, char *)> errorCallback;
+#else
+  void (*onMessage)(transportLayer type, Message *message);
+  void (*errorCallback)(modules moduleName, char *);
+#endif
+
   void onDeviceUpdate();
-	void initSensors();
-	void presentSensors();
+  void presentSensors();
 
-	char* getConfig(DeviceKeys deviceKey);
-	void setConfig(DeviceKeys deviceKey, char *value);
-	Aloes& setCnf(DeviceKeys deviceKey, char* value); 
-	char* getMsg(MessageKeys messageKey);
-	Aloes& setMsg(MessageKeys messageKey, char* value); 
-	Aloes& setMsg(MessageKeys messageKey, const char* value); 
-	Aloes& setMsg(MessageKeys messageKey, uint8_t* value, size_t length); 
+  char *getDevice(DeviceKeys key);
+  void setDevice(DeviceKeys key, char *value);
+  Aloes &setCnf(DeviceKeys key, char *value);
+  char *getMsg(MessageKeys key);
+  Aloes &setMsg(MessageKeys key, char *value);
+  Aloes &setMsg(MessageKeys key, const char *value);
+  Aloes &setMsg(MessageKeys key, uint8_t *value, size_t length);
+  Aloes &setMsg(MessageKeys key, int value);
+  void setPayload(uint8_t *payload, size_t length, const char *type);
 
-	void setPayload(uint8_t *payload, size_t length, const char* type);
+  bool sendMessage(transportLayer type);
+  bool sendMessage(size_t length);
+  bool startStream(size_t length);
+  virtual size_t writeStream(const uint8_t *payload, size_t length);
+  bool endStream();
 
-	bool sendMessage(transportLayer transportType);
-	bool sendMessage(size_t length);
-	bool startStream(size_t length);
-	virtual size_t writeStream(const uint8_t *payload, size_t length);
-	bool endStream();
-
-	bool parseUrl(char *url);
-	bool parseTopic(char* topic);
-	bool parseRoute(transportLayer transportType, char* route);
-	bool parseBody(uint8_t *body, size_t length);
+  bool parseUrl(char *url);
+  bool parseTopic(char *topic);
+  bool parseRoute(transportLayer type, char *route);
+  bool parseBody(uint8_t *body, size_t length);
   //	void parseBody(Stream *stream);
   bool parsePayload(uint8_t *payload, size_t length);
-	bool parseMessage(transportLayer transportType, uint8_t *message, size_t length);
+  bool parseMessage(transportLayer type, uint8_t *message, size_t length);
 
-	bool getState();
-	//	void authenticate();
-	void getFirmwareUpdate();
+  bool getState();
+  //	void authenticate();
+  void getFirmwareUpdate();
 
   bool stateReceived;
   bool sensorsPresented;
+  int retryGetStateCount = 0;
 
 private:
-	//	Sensor sensors[];
-	Message _message; 
-	MESSAGE_CALLBACK_SIGNATURE;
+  Message _message;
 };
 
 #endif

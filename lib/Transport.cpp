@@ -5,40 +5,127 @@ bool Transport::_httpSecure = false;
 bool Transport::_mqttSecure = false;
 bool Transport::reportErrors = false;
 
-Transport::Transport() {
+Transport::Transport(Device *device) {
+  aSerial.vvv().pln(F("Transport.init"));
 
+  setCredentials(device);
+  if (!setupMQTT(device)) {
+    setError("Failed to configure MQTT Client.");
+  }
+  if (!setupHTTP(device)) {
+    setError("Failed to configure HTTP Client.");
+  }
 }
+
+Transport::~Transport() { cleanMQTT(); }
 
 void Transport::setErrorCallback(ERROR_CALLBACK_SIGNATURE) {
   reportErrors = true;
-  this->onError = onError;
+  this->errorCallback = onError;
 }
 
 void Transport::setError(char *error) {
   _error = error;
   if (reportErrors && strcmp(error, "") != 0) {
-    onError(TRANSPORT, error);
+    errorCallback(TRANSPORT, error);
   }
 }
 
-void Transport::setError(const char *error) {
-  setError((char*)error);
+void Transport::setError(const char *error) { setError((char *)error); }
+
+void Transport::setCredentials(Device *device) {
+  this->_userId = device->get(DEVICE_ID);
+  this->_apiKey = device->get(API_KEY);
+  this->_devEui = device->get(DEV_EUI);
 }
 
-bool Transport::setupHTTP(Device &device) {
-  _userId = device.get(DEVICE_ID);
-  _apiKey = device.get(API_KEY);
-  _httpHost = device.get(HTTP_HOST);
-  _httpPort = atoi(device.get(HTTP_PORT));
-  _httpApiRoot = device.get(HTTP_API_ROOT);
+bool Transport::setupMQTT(Device *device) {
+  this->_mqttHost = device->get(MQTT_HOST);
+  this->_mqttClientId = device->get(MQTT_CLIENT_ID);
+  this->_mqttPort = atoi(device->get(MQTT_PORT));
+  this->_mqttTopicIn = device->get(MQTT_TOPIC_IN);
+  this->_mqttTopicOut = device->get(MQTT_TOPIC_OUT);
+  this->_mqttClientAuthenticated = false;
+  strncpy(this->mainMQTTTopic, this->_mqttTopicIn, sizeof(this->mainMQTTTopic));
+  strcat(this->mainMQTTTopic, "/+/+/+/+/+");
 
-  if (strcmp(device.get(HTTP_SECURE), "true") == 0) {
-    _httpSecure = true;
+  if (strcmp(device->get(MQTT_SECURE), "true") == 0) {
+    this->_mqttSecure = true;
+#if CLIENT_SECURE == 1
+    // _mqttClient.setClient(_client2S);
+    _mqttClient.setClient(_clientS);
+
+#if CA_CERT == 1
+    BearSSL::X509List x509CaCert(CA_CERT_PROG);
+    // _client2.setTrustAnchors(&x509CaCert);
+    // _client2.allowSelfSignedCerts();
+    _client2S.setCACert(&x509CaCert);
+#endif
+#if CLIENT_CERT == 1 && CLIENT_KEY == 1
+    BearSSL::X509List x509ClientCert(CLIENT_CERT_PROG);
+    BearSSL::PrivateKey PrivateClientKey(CLIENT_KEY_PROG);
+    //  _client2.setClientRSACert(&x509ClientCert, &PrivateClientKey);
+    _client2S.setCertificate(&x509ClientCert);
+    _client2S.setPrivateKey(&PrivateClientKey);
+#endif
+#if SERVER_KEY == 1
+    BearSSL::PublicKey PublicServerKey(SERVER_KEY_PROG);
+    //  _client2.setKnownKey(&PublicServerKey);
+#endif
+#if CA_CERT == 0 && CLIENT_CERT == 0 && CLIENT_KEY == 0 && SERVER_KEY == 0
+    _client2S.setInsecure();
+    //  int mfln = _wifiClient.probeMaxFragmentLength(_mqttHost,
+    //  atoi(_mqttPort), 1024); aSerial.vvv().p(F("MFLN status :
+    //  ")).pln(_wifiClient.getMFLNStatus()); if (mfln) {
+    //      _wifiClient->setBufferSizes(1024, 1024);
+    //  }
+#endif
+
+#else
+    _mqttClient.setClient(_client2);
+#endif
+    aSerial.vvv().p(F("[MQTT] Init mqtts://"));
+  } else {
+    // this->_mqttClient = PubSubClient();
+    _mqttClient.setClient(_client2);
+    this->_mqttSecure = false;
+    aSerial.vvv().p(F("[MQTT] Init mqtt://"));
+  }
+  // #if CLIENT_SECURE == 1 && defined(MQTT_CLIENT_SECURE)
+
+  //   aSerial.vvv().p(F("[MQTT] Init mqtts://"));
+  // // #elif CLIENT_SECURE == 1 && !defined(MQTT_CLIENT_SECURE)
+  // //   _client2.setInsecure();
+  // #else
+  //   aSerial.vvv().p(F("[MQTT] Init mqtt://"));
+  // #endif
+  if (_mqttHost && _mqttPort) {
+    aSerial.vvv().p(_mqttHost).p(":").pln(_mqttPort);
+    _mqttClient.setServer(_mqttHost, _mqttPort);
+    this->_mqttConfigured = true;
+  } else {
+    this->_mqttConfigured = false;
+  }
+  return this->_mqttConfigured;
+}
+
+void Transport::cleanMQTT() {
+  // delete this->_mqttClient;
+}
+
+bool Transport::setupHTTP(Device *device) {
+  this->_httpHost = device->get(HTTP_HOST);
+  this->_httpPort = atoi(device->get(HTTP_PORT));
+  this->_httpApiRoot = device->get(HTTP_API_ROOT);
+
+  if (strcmp(device->get(HTTP_SECURE), "true") == 0) {
+    this->_httpSecure = true;
 
 #if CLIENT_SECURE == 1
     //  WiFiClientSecure _client;
     //  BearSSL::WiFiClientSecure *_client = new BearSSL::WiFiClientSecure();
-    //  std::unique_ptr<BearSSL::WiFiClientSecure>_client(new BearSSL::WiFiClientSecure);
+    //  std::unique_ptr<BearSSL::WiFiClientSecure>_client(new
+    //  BearSSL::WiFiClientSecure);
 #if CA_CERT == 1
     BearSSL::X509List x509CaCert(CA_CERT_PROG);
     //  _client->setTrustAnchors(&x509CaCert);
@@ -60,151 +147,153 @@ bool Transport::setupHTTP(Device &device) {
     //  client->setFingerprint(fingerprint);
 #endif
 #if CA_CERT == 0 && CLIENT_CERT == 0 && CLIENT_KEY == 0 && SERVER_KEY == 0
-    //  _client->setInsecure();
     _clientS.setInsecure();
-    
-  //  int mfln = _wifiClient.probeMaxFragmentLength(_httpHost, atoi(_httpPort), 1024);
-  //  aSerial.vvv().p(F("MFLN status : ")).pln(_wifiClient.getMFLNStatus());
-  //  if (mfln) {
-  //      _wifiClient->setBufferSizes(1024, 1024);
-  //  }
+
+    //  int mfln = _wifiClient.probeMaxFragmentLength(_httpHost,
+    //  atoi(_httpPort), 1024); aSerial.vvv().p(F("MFLN status :
+    //  ")).pln(_wifiClient.getMFLNStatus()); if (mfln) {
+    //      _wifiClient->setBufferSizes(1024, 1024);
+    //  }
 #endif
 #endif
     aSerial.vvv().p(F("[HTTP] Init https://"));
   } else {
-    _httpSecure = false;
+    this->_httpSecure = false;
     aSerial.vvv().p(F("[HTTP] Init http://"));
   }
 
   aSerial.vvv().p(_httpHost).p(":").pln(_httpPort);
+  // this->_httpClient = HTTPClient();
   _httpClient.setReuse(false);
-  httpConfigured = true;
-  return httpConfigured;
+  this->_httpConfigured = true;
+  return this->_httpConfigured;
 }
 
-bool Transport::setupMQTT(Device &device) {
-  _mqttHost = device.get(MQTT_HOST);
-  _mqttClientId = device.get(MQTT_CLIENT_ID);
-  _mqttPort = atoi(device.get(MQTT_PORT));
-  _mqttTopicIn = device.get(MQTT_TOPIC_IN);
-  _mqttTopicOut = device.get(MQTT_TOPIC_OUT);
-
-  if (strcmp(device.get(MQTT_SECURE), "true") == 0) {
-    _mqttSecure = true;
-#if CLIENT_SECURE == 1 
-    _mqttClient.setClient(_client2S);
-#if CA_CERT == 1
-    BearSSL::X509List x509CaCert(CA_CERT_PROG);
-    // _client2.setTrustAnchors(&x509CaCert);
-    // _client2.allowSelfSignedCerts();
-    _client2S.setCACert(&x509CaCert);
-#endif
-#if CLIENT_CERT == 1 && CLIENT_KEY == 1
-    BearSSL::X509List x509ClientCert(CLIENT_CERT_PROG);
-    BearSSL::PrivateKey PrivateClientKey(CLIENT_KEY_PROG);
-    //  _client2.setClientRSACert(&x509ClientCert, &PrivateClientKey);
-    _client2S.setCertificate(&x509ClientCert);
-    _client2S.setPrivateKey(&PrivateClientKey);
-#endif
-#if SERVER_KEY == 1
-    BearSSL::PublicKey PublicServerKey(SERVER_KEY_PROG);
-    //  _client2.setKnownKey(&PublicServerKey);
-#endif
-#if CA_CERT == 0 && CLIENT_CERT == 0 && CLIENT_KEY == 0 && SERVER_KEY == 0
-    _client2S.setInsecure();
-  //  int mfln = _wifiClient.probeMaxFragmentLength(_mqttHost, atoi(_mqttPort), 1024);
-  //  aSerial.vvv().p(F("MFLN status : ")).pln(_wifiClient.getMFLNStatus());
-  //  if (mfln) {
-  //      _wifiClient->setBufferSizes(1024, 1024);
-  //  }
-#endif
-
-#else
-    _mqttClient.setClient(_client2);
-#endif
-    aSerial.vvv().p(F("[MQTT] Init mqtts://"));
-  } else {
-    _mqttClient.setClient(_client2);
-    _mqttSecure = false;
-    aSerial.vvv().p(F("[MQTT] Init mqtt://"));
-  }
-// #if CLIENT_SECURE == 1 && defined(MQTT_CLIENT_SECURE)
-
-//   aSerial.vvv().p(F("[MQTT] Init mqtts://"));
-// // #elif CLIENT_SECURE == 1 && !defined(MQTT_CLIENT_SECURE)
-// //   _client2.setInsecure();
-// #else
-//   aSerial.vvv().p(F("[MQTT] Init mqtt://"));
-// #endif
-  if (_mqttHost && _mqttPort) {
-    aSerial.vvv().p(_mqttHost).p(":").pln(_mqttPort);
-    _mqttClient.setServer(_mqttHost, _mqttPort);
-    mqttConfigured = true;
-  }
-  return mqttConfigured;
+void Transport::setMQTTCallback(MQTT_CALLBACK) {
+  this->onMQTTMessage = mqttCallback;
+  _mqttClient.setCallback(mqttCallback);
 }
 
-void Transport::update(Device &device) {
-  _userId = device.get(DEVICE_ID);
-  _apiKey = device.get(API_KEY);
-  _httpHost = device.get(HTTP_HOST);
-  _httpPort = atoi(device.get(HTTP_PORT));
-  _httpApiRoot = device.get(HTTP_API_ROOT);
-  if (strcmp(device.get(HTTP_SECURE), "1") == 0) {
-    _httpSecure = true;
-  } else {
-    _httpSecure = false;
-  }
+void Transport::setHTTPCallback(HTTP_CALLBACK) {
+  this->onHTTPMessage = httpCallback;
+}
 
-  _mqttHost = device.get(MQTT_HOST);
-  _mqttClientId = device.get(MQTT_CLIENT_ID);
-  _mqttPort = atoi(device.get(MQTT_PORT));
-  _mqttTopicIn = device.get(MQTT_TOPIC_IN);
-  _mqttTopicOut = device.get(MQTT_TOPIC_OUT);
-  if (strcmp(device.get(MQTT_SECURE), "1") == 0) {
-    _mqttSecure = true;
-  } else {
-    _mqttSecure = false;
+bool Transport::connect(transportLayer type) {
+  if (type == MQTT) {
+    return connectMQTT();
+  } else if (type == HTTP) {
+    return connectHTTP();
   }
+  setError("Invalid transport layer defined");
+  return false;
+}
+
+void Transport::disconnect(transportLayer type) {
+  if (type == MQTT) {
+    _mqttClient.disconnect();
+  } else if (type == HTTP) {
+    _httpClient.end();
+  } else {
+    setError("Invalid transport layer defined");
+  }
+}
+
+bool Transport::connected(transportLayer type) {
+  if (type == MQTT) {
+    return _mqttClient.connected();
+  } else if (type == HTTP) {
+    return _httpClient.connected();
+  }
+  setError("Invalid transport layer defined");
+  return false;
+}
+
+bool Transport::connectMQTT() {
+  if (this->_mqttConfigured) {
+    if (connected(MQTT)) {
+      // if (configMode == 1) {
+      //   callConfigMode = false;
+      // }
+      return true;
+    }
+    if (this->_mqttSecure) {
+      aSerial.vvv().p(F("[MQTT] Connecting to mqtts://"));
+    } else {
+      aSerial.vvv().p(F("[MQTT] Connecting to mqtt://"));
+    }
+    aSerial.vvv().p(this->_mqttHost).p(":").pln(this->_mqttPort);
+
+    // boolean connect (_mqttClientId, _userId, _apiKey, willTopic, willQoS,
+    // willRetain, willMessage, cleanSession)
+
+    if (_mqttClient.connect(this->_mqttClientId, this->_userId,
+                            this->_apiKey)) {
+      aSerial.vvv()
+          .p(F("[MQTT] Connected to broker as : "))
+          .pln(this->_mqttClientId);
+      mqttFailCount = 0;
+      subscribe((const char *)this->mainMQTTTopic, 0);
+      return true;
+    }
+    setError("MQTT connection failed");
+    return false;
+  }
+  setError("MQTT Client not configured");
+  return false;
 }
 
 bool Transport::connectHTTP() {
-  if (httpConfigured) {
+  if (this->_httpConfigured) {
     if (connected(HTTP)) {
       // if (configMode == 1) {
       //   callConfigMode = false;
       // }
-      setError("");
       return true;
     }
 
-    if (!_httpUrl) {
-      _httpUrl = "/";
+    if (!this->_httpUrl) {
+      this->_httpUrl = "/";
     }
     bool connected = false;
-    if (_httpSecure) {
+    if (this->_httpSecure) {
 #if CLIENT_SECURE == 1
-    //  if (_httpClient.begin(dynamic_cast<WiFiClient&>(*_client), _httpHost, _httpPort, url, true)) {
-      aSerial.vvv().p(F("[HTTP] Connecting to https://")).p(_httpHost).p(F(":")).pln(_httpPort);
-      if (_httpClient.begin(dynamic_cast<WiFiClient&>(_clientS), _httpHost, _httpPort, _httpUrl, true)) {
+      //  if (_httpClient.begin(dynamic_cast<WiFiClient&>(*_client), _httpHost,
+      //  _httpPort, url, true)) {
+      aSerial.vvv()
+          .p(F("[HTTP] Connecting to https://"))
+          .p(this->_httpHost)
+          .p(F(":"))
+          .pln(this->_httpPort);
+      if (_httpClient.begin(dynamic_cast<WiFiClient &>(_clientS),
+                            this->_httpHost, this->_httpPort, this->_httpUrl,
+                            true)) {
         connected = true;
       }
 
 #else
-      aSerial.vvv().p(F("[HTTP] Connecting to http://")).p(_httpHost).p(F(":")).pln(_httpPort);
-      if (_httpClient.begin(_client, _httpHost, _httpPort, _httpUrl, false)) {
+      aSerial.vvv()
+          .p(F("[HTTP] Connecting to http://"))
+          .p(this->_httpHost)
+          .p(F(":"))
+          .pln(this->_httpPort);
+      if (_httpClient.begin(_client, this->_httpHost, this->_httpPort,
+                            this->_httpUrl, false)) {
         connected = true;
-      }  
+      }
 #endif
     } else {
-      aSerial.vvv().p(F("[HTTP] Connecting to http://")).p(_httpHost).p(F(":")).pln(_httpPort);
-      if (_httpClient.begin(_client, _httpHost, _httpPort, _httpUrl, false)) {
+      aSerial.vvv()
+          .p(F("[HTTP] Connecting to http://"))
+          .p(this->_httpHost)
+          .p(F(":"))
+          .pln(this->_httpPort);
+      if (_httpClient.begin(_client, this->_httpHost, this->_httpPort,
+                            this->_httpUrl, false)) {
         connected = true;
-      }  
+      }
     }
 
     if (connected) {
-      setError("");
       return true;
     }
     setError("Couldn't connect to HTTP Server");
@@ -214,140 +303,7 @@ bool Transport::connectHTTP() {
   return false;
 }
 
-bool Transport::connectMQTT() {
-  if (mqttConfigured) {
-    if (connected(MQTT)) {
-      // if (configMode == 1) {
-      //   callConfigMode = false;
-      // }
-      setError("");
-      return true;
-    }
-    if (_mqttSecure) {
-      aSerial.vvv().p(F("[MQTT] Connecting to mqtts://"));
-    } else {
-      aSerial.vvv().p(F("[MQTT] Connecting to mqtt://"));
-    }
-    aSerial.vvv().p(_mqttHost).p(":").pln(_mqttPort);
-
-    // boolean connect (_mqttClientId, _userId, _apiKey, willTopic, willQoS, willRetain, willMessage, cleanSession)
-    
-    if (_mqttClient.connect(_mqttClientId, _userId, _apiKey)) {
-      aSerial.vvv().p(F("[MQTT] Connected to broker as : ")).pln(_mqttClientId);
-      mqttFailCount = 0;
-      char masterTopic[60];
-      strlcpy(masterTopic, _mqttTopicIn, sizeof(masterTopic));
-      strcat(masterTopic, "/+/+/+/+" );
-      subscribe((const char*)masterTopic, 0);
-      setError("");
-      return true;
-    } 
-    setError("MQTT connection failed");
-    return false;
-  }
-  setError("MQTT Client not configured");
-  return false;
-}
-
-bool Transport::connect(transportLayer transportType) {
-  if (transportType == MQTT) {
-    return connectMQTT();
-  } else if (transportType == HTTP) {
-    return connectHTTP();
-  }
-  setError("Invalid transport layer defined");
-  return false;
-}
-
-bool Transport::asyncConnectHTTP(AsyncWait *async, MilliSec startTime, unsigned long interval) {
-  if (async->isWaiting(startTime)) {
-    return true;
-  }
-  if (connect(HTTP)) {
-    httpFailCount = 0;
-    async->cancel();
-    return false;
-  }
-  if (httpFailCount > httpMaxFailedCount && !callConfigMode) {
-    httpFailCount = 0;
-    callConfigMode = true;
-    async->cancel();
-    return false;
-  }
-  ++httpFailCount;
-  async->startWaiting(startTime, interval);
-  return true;
-}
-
-bool Transport::asyncConnectMQTT(AsyncWait *async, MilliSec startTime, unsigned long interval) {
-  if (async->isWaiting(startTime)) {
-    return true;
-  }
-  if (connect(MQTT)) {
-    mqttFailCount = 0;
-    async->cancel();
-    return true;
-  }
-  if (mqttFailCount > mqttMaxFailedCount && !callConfigMode) {
-    mqttFailCount = 0;
-    callConfigMode = true;
-    //  async->cancel();
-    //  return false;
-  }
-  ++mqttFailCount;
-  async->startWaiting(startTime, interval);
-  return true;
-}
-
-bool Transport::asyncConnect(transportLayer transportType, AsyncWait *async, MilliSec startTime, unsigned long interval) {
-  if (transportType == MQTT) {
-    return asyncConnectMQTT(async, startTime, interval);
-  } else if (transportType == HTTP) {
-    return asyncConnectHTTP(async, startTime, interval);
-  }
-  setError("Invalid transport layer defined");
-  return false;
-}
-
-bool Transport::asyncConnect(transportLayer transportType, AsyncWait *async, MilliSec startTime) {
-  if (transportType == MQTT) {
-    return asyncConnectMQTT(async, startTime, mqttReconnectInterval);
-  } else if (transportType == HTTP) {
-    return asyncConnectHTTP(async, startTime, httpReconnectInterval);
-  }
-  setError("Invalid transport layer defined");
-  return false;
-}
-
-void Transport::disconnect(transportLayer transportType) {
-  if (transportType == MQTT) {
-    _mqttClient.disconnect();
-  } else if (transportType == HTTP) {
-    _httpClient.end();
-  } else {
-    setError("Invalid transport layer defined");
-  }
-}
-
-bool Transport::connected(transportLayer transportType) {
-  if (transportType == MQTT) {
-    return _mqttClient.connected();
-  } else if (transportType == HTTP) {
-    return _httpClient.connected();
-  }
-  setError("Invalid transport layer defined");
-  return false;
-}
-
-void Transport::setMQTTCallback(MQTT_CALLBACK_SIGNATURE) {
-  _mqttClient.setCallback(callback);
-}
-
-void Transport::setHTTPCallback(HTTP_CALLBACK_SIGNATURE) {
- this->httpCallback = httpCallback;
-}
-
-bool Transport::publish(const char* topic, const char* payload, bool retained) {
+bool Transport::publish(const char *topic, const char *payload, bool retained) {
   if (connected(MQTT)) {
     if (_mqttClient.publish(topic, payload, retained)) {
       setError("");
@@ -360,7 +316,8 @@ bool Transport::publish(const char* topic, const char* payload, bool retained) {
   return false;
 }
 
-bool Transport::publish(const char* topic, const uint8_t *payload, size_t length, bool retained) {
+bool Transport::publish(const char *topic, const uint8_t *payload,
+                        size_t length, bool retained) {
   if (connected(MQTT)) {
     if (_mqttClient.publish(topic, payload, length, retained)) {
       setError("");
@@ -373,7 +330,7 @@ bool Transport::publish(const char* topic, const uint8_t *payload, size_t length
   return false;
 }
 
-bool Transport::subscribe(const char* topic, int qos) {
+bool Transport::subscribe(const char *topic, int qos) {
   if (!qos) {
     qos = 0;
   }
@@ -387,7 +344,7 @@ bool Transport::subscribe(const char* topic, int qos) {
   return (substate);
 }
 
-bool Transport::beginPublish(const char* topic, size_t length, bool retained) {
+bool Transport::beginPublish(const char *topic, size_t length, bool retained) {
   if (_mqttClient.beginPublish(topic, length, retained)) {
     setError("");
     return true;
@@ -409,18 +366,15 @@ bool Transport::endPublish() {
   return false;
 }
 
-
-int Transport::sendRequest(int method, const char* payload) {
-  switch(method) {
-    case 1 : {
-      return _httpClient.POST(payload);
-    }
-    case 2 : {
-      return _httpClient.GET();
-    }
-    default : {
-      setError("Invalid HTTP method");
-    }
+int Transport::sendRequest(int method, const char *payload) {
+  switch (method) {
+  case 1: {
+    return _httpClient.POST(payload);
+  }
+  case 2: {
+    return _httpClient.GET();
+  }
+  default: { setError("Invalid HTTP method"); }
   }
 }
 
@@ -428,12 +382,13 @@ void Transport::setRequestHeaders() {
   _httpClient.addHeader("Host", _httpHost);
   //  _httpClient.addHeader("User-Agent", device.getDeviceName());
   _httpClient.addHeader("Accept", "application/json, text/plain, */*");
-  _httpClient.addHeader("ApiKey", _apiKey);
+  _httpClient.addHeader("deveui", _devEui);
+  _httpClient.addHeader("apikey", _apiKey);
 }
 
-void Transport::setResponseHeaders(char* headers[][100]) {
+void Transport::setResponseHeaders(char *headers[][100]) {
   for (size_t j = 0; j < 1; j++) {
-    const char *header = _httpClient.header(headers[j][0]).c_str(); 
+    const char *header = _httpClient.header(headers[j][0]).c_str();
     int i = 0;
     do {
       headers[j][1][i] = header[i];
@@ -458,14 +413,15 @@ void Transport::parseStream(const char *url, size_t length) {
     size_t size = _stream->available();
     if (size) {
       std::unique_ptr<char[]> tmpBuff(new char[size]);
-      int c = _stream->readBytes(tmpBuff.get(), ((size > bufferSize) ? bufferSize : size));
-      for (int i = 0; i <= c; i++) {
+      int c = _stream->readBytes(tmpBuff.get(),
+                                 ((size > bufferSize) ? bufferSize : size));
+      for (size_t i = 0; i <= c; i++) {
         if (bufferSize == length) {
           buffer[i] = tmpBuff.get()[i];
         } else {
           buffer[pushedBufferSize + i] = tmpBuff.get()[i];
         }
-      }      
+      }
       pushedBufferSize += c;
       //  Serial.write(tmpBuff.get(), c);
       if (length > 0) {
@@ -474,17 +430,18 @@ void Transport::parseStream(const char *url, size_t length) {
     }
     delay(1);
   }
-  if (httpCallback) {
-    httpCallback((char*)url, buffer, bufferSize);  
+  if (onHTTPMessage) {
+    onHTTPMessage((char *)url, buffer, bufferSize);
   }
 }
 
-bool Transport::setRequest(const char* method, const char *url, const char *payload) {
+bool Transport::setRequest(const char *method, const char *url,
+                           const char *payload) {
   if (!url) {
     url = "/";
   }
-  _httpUrl = url;
-  //  todo :  if (3 first char of config.hhtpHost are letters) 
+  this->_httpUrl = url;
+  //  todo :  if (3 first char of config.hhtpHost are letters)
   // else try ip address
   // IPAddress httpHost;
   // httpHost.fromString(_httpHost);
@@ -492,7 +449,7 @@ bool Transport::setRequest(const char* method, const char *url, const char *payl
   // _httpClient.setAuthorization(_apiKey);
   if (connect(HTTP)) {
     bool resSuccess = false;
-  
+
     const char *keys[] = {"Content-Type"};
     //  aSerial.vvvv().p(F("[HTTP] header name : ")).pln(sizeof(keys[0]));
     // char* headers[][100] = {};
@@ -509,21 +466,21 @@ bool Transport::setRequest(const char* method, const char *url, const char *payl
     // aSerial.vvvv().p(F("[HTTP] header name : ")).pln(headers[0][0]);
 
     _httpClient.collectHeaders(keys, 1);
-    
+
     setRequestHeaders();
     int httpCode = sendRequest(atoi(method), payload);
+    aSerial.vvv().p(F("[HTTP] Status : ")).pln(httpCode);
 
     if (httpCode > 0) {
-      aSerial.vvv().p(F("[HTTP] Status : ")).pln(httpCode);
-       // setResponseHeaders(headers);
+      // aSerial.vvv().p(F("[HTTP] Status : ")).pln(httpCode);
+      // setResponseHeaders(headers);
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
         int len = _httpClient.getSize();
         if (len != -1) {
           parseStream(url, len);
-        } 
+        }
         setError("");
         resSuccess = true;
-        //  aSerial.vvv().pln(F("[HTTP] connection closed or file end "));
       }
     } else {
       char err[150];
@@ -538,50 +495,51 @@ bool Transport::setRequest(const char* method, const char *url, const char *payl
   return false;
 }
 
-void Transport::getUpdated(int which, const char* host, int port, const char* url) {
-  if (_network.connected()) {
-    helpers.startTick(0.7);
-    //  otaSignal = 0;
+void Transport::getUpdated(int which, const char *host, int port,
+                           const char *url) {
+
+  //  otaSignal = 0;
 #if MANUAL_SIGNING
-   //  Update.installSignature(transport.hash, trasnport.sign);
+  //  Update.installSignature(transport.hash, trasnport.sign);
 #endif
 
-#if defined(ESP8266) 
-    //  updateFile(otaFile, otaSignal);
-    //  ESPhttpUpdate.rebootOnUpdate(true);
-    ESPhttpUpdate.setLedPin(STATE_LED, LOW);
-    t_httpUpdate_return ret;
+#if defined(ESP8266)
+  //  updateFile(otaFile, otaSignal);
+  //  ESPhttpUpdate.rebootOnUpdate(true);
+  ESPhttpUpdate.setLedPin(STATE_LED, LOW);
+  t_httpUpdate_return ret;
 
-    if (_httpSecure) {
+  if (_httpSecure) {
 #if CLIENT_SECURE == 1
-      ret = ESPhttpUpdate.update(_clientS, host, port, url);
+    ret = ESPhttpUpdate.update(_clientS, host, port, url);
 #else
-      ret = ESPhttpUpdate.update(_client, host, port, url);
+    ret = ESPhttpUpdate.update(_client, host, port, url);
 #endif
-    } else {
-      ret = ESPhttpUpdate.update(_client, host, port, url);
-    }
+  } else {
+    ret = ESPhttpUpdate.update(_client, host, port, url);
+  }
 
-   switch (ret) {
-     case HTTP_UPDATE_FAILED:
-       aSerial.v().p(F("HTTP_UPDATE_FAILD Error : ")).p(ESPhttpUpdate.getLastError()).p(" / ").pln(ESPhttpUpdate.getLastErrorString().c_str());
-       break;
-     case HTTP_UPDATE_NO_UPDATES:
-       aSerial.v().pln(F("HTTP_UPDATE_NO_UPDATES "));
-       break;
-     case HTTP_UPDATE_OK:
-       aSerial.v().pln(F("HTTP_UPDATE_OK"));
-       break;
-   }
+  switch (ret) {
+  case HTTP_UPDATE_FAILED:
+    aSerial.v()
+        .p(F("HTTP_UPDATE_FAILD Error : "))
+        .p(ESPhttpUpdate.getLastError())
+        .p(" / ")
+        .pln(ESPhttpUpdate.getLastErrorString().c_str());
+    break;
+  case HTTP_UPDATE_NO_UPDATES:
+    aSerial.v().pln(F("HTTP_UPDATE_NO_UPDATES "));
+    break;
+  case HTTP_UPDATE_OK:
+    aSerial.v().pln(F("HTTP_UPDATE_OK"));
+    break;
+  }
 
 #elif defined(ESP32)
-   // todo : implement https://github.com/espressif/arduino-esp32/blob/master/libraries/Update/examples/AWS_S3_OTA_Update/AWS_S3_OTA_Update.ino
-   return;
+  // todo : implement
+  // https://github.com/espressif/arduino-esp32/blob/master/libraries/Update/examples/AWS_S3_OTA_Update/AWS_S3_OTA_Update.ino
+  return;
 #endif
-    helpers.stopTick();
-  }
 }
 
-bool Transport::loop(Device &device) {
-  return _mqttClient.loop();
-}
+bool Transport::loop() { return _mqttClient.loop(); }

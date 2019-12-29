@@ -15,26 +15,11 @@
 // #define PRINT_ERRORS
 #define BAUD_RATE 115200
 
-// ESP
-#if defined(ESP8266) 
-#define BOUNCE_LOCK_OUT
-#define STATE_LED       D4
-#define OTA_BUTTON_PIN  D3
-#define RELAY_SWITCH  D0
-
-#elif defined(ESP32)
-// fix pin config
-#define STATE_LED       16
-#define OTA_BUTTON_PIN  15
-#define RELAY_SWITCH    12
-#endif
-
-
-// NETWORK CONFIG
 // WiFi default config ; leave empty to use Portal config
 #define DEFAULT_WIFI_SSID "" 
 #define DEFAULT_WIFI_PASS ""
 
+// NETWORK CONFIG
 #define DEFAULT_DEVICE_NAME "aloes-device"
 #define DEFAULT_DEVICE_PASS ""
 
@@ -42,29 +27,24 @@
 #define DEFAULT_MQTT_TOPIC_PREFIX_IN "-in"
 #define DEFAULT_MQTT_TOPIC_PREFIX_OUT "-out"
 
-
 const char* defaultDeviceId = "";
 const char* defaultDeviceApiKey = "";
 
 const char* defaultHttpHost = "192.168.1.128";
 const char* defaultHttpPort = "8000";
-bool defaultHttpSecure = 0;
+bool defaultHttpSecure = false;
 
 const char* defaultMqttHost = "192.168.1.133";
 const char* defaultMqttPort = "1883";
-bool defaultMqttSecure = 0;
+bool defaultMqttSecure = false;
+// bool defaultMqttSelfSigned = true;
 
 const char* defaultMqttTopicIn = "123456-in";
 const char* defaultMqttTopicOut = "123456-out";
 
+const String configFileName = "device.json";
+static const size_t objBufferSize = 512;
 
-// sensors to register ( max size 60 )
-// following OMA object description
-// ( objectId, sensorId, resourceId, payload )
-// todo : make a resources array instead ?
-const char* sensors[][60] = {
-  { "3306", "1", "5850", "digital_input"},
-  { "3349", "2", "5910", "buffer_input"},
-};
+const String sensorsFileName = "/sensors.json";
 
 #endif

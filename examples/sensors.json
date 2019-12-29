@@ -1,0 +1,16 @@
+[
+  {
+    "objectId": 3342,
+    "nodeId": 0,
+    "sensorId": 1,
+    "resourceId": 5500,
+    "payload": "digital_input"
+  },
+  {
+    "objectId": 3349,
+    "nodeId": 0,
+    "sensorId": 2,
+    "resourceId": 5910,
+    "payload": "buffer_input"
+  }
+]

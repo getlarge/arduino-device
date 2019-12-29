@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 #include <FS.h>
-#if defined(ESP8266) 
+#if defined(ESP8266)
 #elif defined(ESP32)
 #include <SPIFFS.h>
 #define FORMAT_SPIFFS_IF_FAILED true
@@ -13,30 +13,30 @@
 #include <ArduinoJson.h>
 #include <advancedSerial.h>
 
-#if defined(ESP8266) 
+#if defined(ESP8266)
 #include <ESP8266WiFi.h>
 #elif defined(ESP32)
 #include <WiFi.h>
 #endif
 
+#if CLIENT_SECURE == 1
+#include <WiFiClientSecure.h>
+//	#include <WiFiClientSecureBearSSL.h>
+#endif
+
+#if defined(ESP8266)
+#include <ESP8266HTTPClient.h>
+#include <ESP8266httpUpdate.h>
+#elif defined(ESP32)
+#include <HTTPClient.h>
+#include <Update.h>
+#endif
+
+#include <PubSubClient.h>
+
 #include "lib/Globals.h"
 
 #include "lib/AsyncWait.h"
-
-#include "lib/Device.cpp"
-Device device;
-
-#include "lib/Helpers.cpp"
-Helpers helpers; 
-
-#include "lib/Network.cpp"
-Network _network; 
-
-#include "lib/Manager.cpp"
-Manager manager(device); 
-
-#include "lib/Transport.cpp"
-Transport _transport; 
 
 #include "lib/Aloes.cpp"
 extern Aloes aloes;
