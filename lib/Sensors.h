@@ -48,10 +48,14 @@ public:
   // Type &operator()(unsigned x, SensorKeys y) { return sensors[Type(y) *
   // nIndex + x]; }
 
-  Type get(unsigned x, SensorKeys y) { return sensors[int(y) * nIndex + x]; }
+  Type get(unsigned x, SensorKeys y) { 
+    return sensors[int(y) * nIndex + x]; 
+  }
+  
   const Type get(unsigned x, SensorKeys y) const {
     return sensors[int(y) * nIndex + x];
   }
+
   void set(unsigned x, SensorKeys y, Type value) {
     sensors[int(y) * nIndex + x] = value;
   }
@@ -80,7 +84,10 @@ public:
 
   ~Sensors() { delete sensors; }
 
-  Type *get(unsigned x, SensorKeys y) { return sensors[int(y) * nIndex + x]; }
+  Type *get(unsigned x, SensorKeys y) { 
+    return sensors[int(y) * nIndex + x]; 
+  }
+
   const Type *get(unsigned x, SensorKeys y) const {
     return sensors[int(y) * nIndex + x];
   }

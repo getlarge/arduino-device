@@ -121,9 +121,7 @@ private:
   static bool reportErrors;
   const char *_error;
 
-  // const String configFileName = "device.json";
   // static const size_t objBufferSize = 512;
-  // const String sensorsFileName = "/sensors.json";
 
   static const size_t _deviceNameSize = 40;
   char _deviceName[_deviceNameSize];
